@@ -1,4 +1,4 @@
-import { Block, BlockPermutation, ContainerSlot, Entity, EntityComponentTypes, EquipmentSlot, ItemComponentTypes, ItemStack, Player, system, world } from "@minecraft/server";
+import { Block, BlockPermutation, ContainerSlot, Entity, EntityComponentTypes, EquipmentSlot, GameMode, ItemComponentTypes, ItemStack, Player, system, world } from "@minecraft/server";
 import { Material, MaterialTag } from "./lib/Material";
 import { Vector3Builder } from "./util/Vector";
 
@@ -13,17 +13,48 @@ function choiceByWeight(list: number[]): number {
     }
 }
 
+function uuid(): string {
+    const chars = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.split('');
+
+        for (let i = 0; i < chars.length; i++) {
+            switch (chars[i]) {
+                case 'x':
+                    chars[i] = Math.floor(Math.random() * (15 + 1 - 0) + 0).toString(16);
+                    break;
+                case 'y':
+                    chars[i] = Math.floor(Math.random() * (11 + 1 - 8) + 8).toString(16);
+                    break;
+            }
+        }
+
+        return chars.join('');
+}
+
+interface MineCutAllEventListeners {
+    readonly onComplete: Set<() => void>;
+
+    readonly onBreakTool: Set<() => void>;
+}
+
+type MineCutAllEventTypes = keyof MineCutAllEventListeners;
+
 class MineCutAllHandler {
     private readonly player: Player;
 
     private readonly selectedSlot: ContainerSlot;
 
-    private readonly entries: MineCutAllEntry[];
+    private readonly entries: MineCutAllEntry[] = [];
 
-    public constructor(player: Player, ...entries: MineCutAllEntry[]) {
+    private readonly queues: Set<string> = new Set();
+
+    private readonly __events__: MineCutAllEventListeners = {
+        onComplete: new Set(),
+        onBreakTool: new Set()
+    };
+
+    private constructor(player: Player) {
         this.player = player;
-        this.selectedSlot = player.getComponent(EntityComponentTypes.Equippable).getEquipmentSlot(EquipmentSlot.Mainhand);
-        this.entries = entries;
+        this.selectedSlot = player.getComponent(EntityComponentTypes.Equippable).getEquipmentSlot(EquipmentSlot.Mainhand); ////////////////////////////////
     }
 
     private hasFortune(): boolean {
@@ -96,6 +127,8 @@ class MineCutAllHandler {
     }
 
     private applyToolDamage(): boolean {
+        if (this.player.getGameMode() === GameMode.creative) return;
+
         const itemStack = this.selectedSlot.getItem();
 
         if (itemStack === undefined) {
@@ -114,6 +147,7 @@ class MineCutAllHandler {
         else {
             this.selectedSlot.setItem();
             this.player.playSound("random.break", { volume: 10, pitch: 1 });
+            this.__events__.onBreakTool.forEach(listener => listener());
             return true;
         }
     }
@@ -148,9 +182,12 @@ class MineCutAllHandler {
         return [dropped, permutation];
     }
 
-    private async spread(source: Block, center: Block, entry: MineCutAllEntry) {
+    private spread(source: Block, center: Block, entry: MineCutAllEntry): void {
         for (const block of this.getBlocks(source, center, entry.getTargetIds(), entry.distance())) {
             if (!this.selectedItemIsValid()) break;
+
+            const id = uuid();
+            this.queues.add(id);
 
             const [droppedItemEntities, permutation] = this.destroyBlock(block);
 
@@ -173,13 +210,17 @@ class MineCutAllHandler {
 
             const broken = this.applyToolDamage();
 
-            if (broken) break;
+            if (broken) {
+                this.queues.delete(id);
+                break;
+            }
 
-            if (Math.random() >= 0.5) await system.waitTicks(1);
+            const delay = Math.floor(Math.random() * 3) + 1;
 
-            system.run(() => {
+            system.runTimeout(() => {
                 this.spread(source, block, entry);
-            });
+                this.queues.delete(id);
+            }, delay);
         }
     }
 
@@ -201,7 +242,24 @@ class MineCutAllHandler {
             throw new Error("trigger");
         }
 
+        if (this.queues.size > 0) {
+            throw new Error("queues count is not 0");
+        }
+
         this.spread(source, source, entry);
+
+        let i = 0;
+        const handle = system.runInterval(() => {
+            i++;
+            if (this.queues.size === 0) {
+                this.__events__.onComplete.forEach(listener => listener());
+                system.clearRun(handle);
+            }
+            else if (i > (20 * 8)) {
+                system.clearRun(handle);
+                console.warn("queue observer is disabled");
+            }
+        });
     }
 
     public tryTrigger(brokenBlockPermutation: BlockPermutation, source: Block): void {
@@ -213,6 +271,18 @@ class MineCutAllHandler {
                 break;
             }
         }
+    }
+
+    public addEntry(...entries: MineCutAllEntry[]): void {
+        this.entries.push(...entries);
+    }
+
+    public addEventListener(event: MineCutAllEventTypes, listener: () => void): void {
+        this.__events__[event].add(listener);
+    }
+
+    public static create(player: Player) {
+        return new this(player);
     }
 }
 
@@ -311,7 +381,7 @@ class MineCutAllEntry {
         const entry = new MineCutAllEntry();
         entry.triggers(...Material.values().filter(material => (blockTag ? !material.hasTag(blockTag) : true) && material.hasTag(MaterialTag.ORES)));
         entry.keys(pickaxe);
-        entry.distance(8);
+        entry.distance(16);
         entry.fortune(true);
         entry.silkTouch(true);
         return entry;
@@ -358,11 +428,18 @@ class MineCutAllEntry {
 }
 
 world.afterEvents.playerBreakBlock.subscribe(({ player, brokenBlockPermutation, block }) => {
-    const mineCutAll = new MineCutAllHandler(
-        player,
+    const handler = MineCutAllHandler.create(player);
+    handler.addEntry(
         MineCutAllEntry.getCutAll(),
         ...MineCutAllEntry.getMineAll(),
         ...MineCutAllEntry.getUncommonStones()
     );
-    mineCutAll.tryTrigger(brokenBlockPermutation, block);
+    handler.addEventListener("onComplete", () => {
+        console.warn("completed");
+    });
+    handler.addEventListener("onBreakTool", () => {
+        console.warn("broken");
+    });
+
+    handler.tryTrigger(brokenBlockPermutation, block);
 });
