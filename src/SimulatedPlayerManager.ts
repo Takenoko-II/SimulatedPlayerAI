@@ -1,11 +1,11 @@
-import { BlockVolume, EntityDamageSource, EntityQueryOptions, GameMode, ItemStack, Player, system, Vector3, world } from "@minecraft/server";
+import { BlockVolume, EntityComponentTypes, EntityDamageSource, EntityQueryOptions, EquipmentSlot, GameMode, ItemStack, Player, system, Vector3, world } from "@minecraft/server";
 
 import { register, SimulatedPlayer } from "@minecraft/server-gametest";
 
 import { MinecraftDimensionTypes } from "./lib/@minecraft/vanilla-data/lib/index";
 
 import { ActionFormWrapper, MessageFormWrapper, ModalFormWrapper } from "./lib/UI";
-import { Vector3Builder } from "./util/Vector";
+import { TripleAxisRotationBuilder, Vector3Builder } from "./util/Vector";
 import { Material } from "./lib/Material";
 
 export interface SimulatedPlayerSpawnRequest {
@@ -81,9 +81,33 @@ type SimulatedPlayerEventTypes = {
     readonly onHurt: SimulatedPlayerHurtEvent;
 }
 
+enum SimulatedPlayerArmorMaterial {
+    NONE = "none",
+    LEATHER = "leather",
+    GOLDEN = "golden",
+    CHAINMAIL = "chainmail",
+    IRON = "iron",
+    DIAMOND = "diamond",
+    NETHERITE = "netherite"
+}
+
+enum SimulatedPlayerWeaponMaterial {
+    NONE = "none",
+    WOODEN = "wooden",
+    GOLDEN = "golden",
+    STONE = "stone",
+    IRON = "iron",
+    DIAMOND = "diamond",
+    NETHERITE = "netherite"
+}
+
 export class SimulatedPlayerManager {
     private readonly player: SimulatedPlayer;
-    
+
+    private __armor__: SimulatedPlayerArmorMaterial = SimulatedPlayerArmorMaterial.NONE;
+
+    private __weapon__: SimulatedPlayerWeaponMaterial = SimulatedPlayerWeaponMaterial.NONE;
+
     private __ai__: boolean = true;
 
     public get ai(): boolean {
@@ -107,12 +131,47 @@ export class SimulatedPlayerManager {
         return world.getPlayers().filter(player => player.id === this.player.id)[0];
     }
 
-    public isValid(): boolean {
-        return world.getPlayers().some(player => player.id === this.player.id);
+    public get armor(): SimulatedPlayerArmorMaterial {
+        return this.__armor__;
     }
 
-    public getFallingTicks(): number {
-        return simulatedPlayerFallingTicks.get(this) ?? 0;
+    public set armor(value) {
+        this.__armor__ = value;
+        const equippable = this.getAsServerPlayer().getComponent(EntityComponentTypes.Equippable);
+        if (this.__armor__ === "none") {
+            equippable.setEquipment(EquipmentSlot.Head);
+            // @ts-ignore
+            equippable.setEquipment("Chest");
+            equippable.setEquipment(EquipmentSlot.Legs);
+            equippable.setEquipment(EquipmentSlot.Feet);
+        }
+        else {
+            equippable.setEquipment(EquipmentSlot.Head, new ItemStack(this.__armor__ + "_helmet"));
+            // @ts-ignore
+            equippable.setEquipment("Chest", new ItemStack(this.__armor__ + "_chestplate"));
+            equippable.setEquipment(EquipmentSlot.Legs, new ItemStack(this.__armor__ + "_leggings"));
+            equippable.setEquipment(EquipmentSlot.Feet, new ItemStack(this.__armor__ + "_boots"));
+        }
+    }
+
+    public get weapon(): SimulatedPlayerWeaponMaterial {
+        return this.__weapon__;
+    }
+
+    public set weapon(value) {
+        this.__weapon__ = value;
+        if (this.__weapon__ === "none") {
+            this.getAsServerPlayer().getComponent(EntityComponentTypes.Inventory).container.setItem(0);
+            this.getAsServerPlayer().selectedSlotIndex = 0;
+        }
+        else {
+            this.getAsServerPlayer().getComponent(EntityComponentTypes.Inventory).container.setItem(0, new ItemStack(this.__weapon__ + "_sword"));
+            this.getAsServerPlayer().selectedSlotIndex = 0;
+        }
+    }
+
+    public isValid(): boolean {
+        return this.player.isValid() && this.getAsServerPlayer().isValid();
     }
 
     public static requestSpawnPlayer(request: SimulatedPlayerSpawnRequest): void {
@@ -124,7 +183,7 @@ export class SimulatedPlayerManager {
         const set: Set<SimulatedPlayerManager> = new Set();
 
         for (const playerManager of simulatedPlayerManagers) {
-            if (playerManager.getAsGameTestPlayer().isValid()) {
+            if (playerManager.isValid()) {
                 if (options === undefined) {
                     set.add(playerManager);
                 }
@@ -157,15 +216,13 @@ export class SimulatedPlayerManager {
     };
 
     public static showAsForm(player: Player) {
-        form.main(player);
+        form.main().open(player);
     }
 }
 
-const simulatedPlayerFallingTicks: Map<SimulatedPlayerManager, number> = new Map();
-
 const form = {
-    main(player: Player) {
-        const main = new ActionFormWrapper()
+    main(): ActionFormWrapper {
+        return new ActionFormWrapper()
         .title("Simulated Player Manager")
         .button("§a召喚", "textures/ui/color_plus", player => {
             form.spawn().open(player);
@@ -179,8 +236,7 @@ const form = {
             form.list(manager => {
                 form.delete(manager).open(player);
             }).open(player);
-        })
-        .open(player);
+        });
     },
 
     spawn(): ModalFormWrapper {
@@ -224,12 +280,28 @@ const form = {
     },
 
     config(manager: SimulatedPlayerManager): ModalFormWrapper {
+        const armors = ["none", "leather", "golden", "chainmail", "iron", "diamond", "netherite"];
+        const weapons = ["none", "wooden", "stone", "iron", "diamond", "netherite"];
         return new ModalFormWrapper()
         .title("Simulated Player Config")
+        .dropdown("armor", "防具", armors, armors.indexOf(manager.armor))
+        .dropdown("weapon", "近接武器", weapons, weapons.indexOf(manager.weapon))
+        .dropdown("offHand", "オフハンド", ["none", "shield", "totem_of_undying"])
         .toggle("ai", "AI", manager.ai)
         .onSubmit(event => {
-            const ai = event.getToggle("ai");
-            manager.ai = ai;
+            const offHand = event.getDropdown("offHand");
+            const equippable = manager.getAsServerPlayer().getComponent(EntityComponentTypes.Equippable);
+
+            manager.ai = event.getToggle("ai");
+            manager.armor = event.getDropdown("armor") as SimulatedPlayerArmorMaterial;
+            manager.weapon = event.getDropdown("weapon") as SimulatedPlayerWeaponMaterial;
+
+            if (offHand === "none") {
+                equippable.setEquipment(EquipmentSlot.Offhand);
+            }
+            else {
+                equippable.setEquipment(EquipmentSlot.Offhand, new ItemStack(offHand));
+            }
         });
     }
 };
@@ -320,6 +392,7 @@ world.afterEvents.playerSpawn.subscribe(event => {
     if (!manager.isValid()) return;
 
     manager.getAsGameTestPlayer().teleport({ x: 0.5, y: -60, z: 0.5 });
+    manager.getAsServerPlayer().selectedSlotIndex = 0;
 
     system.runTimeout(() => {
         manager.getAsGameTestPlayer().nameTag = `${manager.getAsGameTestPlayer().name}\n§r§cHealth: §f20`;
@@ -358,27 +431,66 @@ world.afterEvents.entityHurt.subscribe(event => {
     });
 });
 
-system.runInterval(() => {
-    for (const player of SimulatedPlayerManager.getManagers()) {
-        if (player.getAsGameTestPlayer().isFalling) {
-            const ticks = simulatedPlayerFallingTicks.get(player);
-            if (ticks === undefined) {
-                simulatedPlayerFallingTicks.set(player, 1);
-            }
-            else {
-                simulatedPlayerFallingTicks.set(player, ticks + 1);
-            }
-        }
-        else {
-            simulatedPlayerFallingTicks.set(player, 0);
-        }
-    }
-});
-
 const handledMap: Map<SimulatedPlayerManager, boolean> = new Map();
+const simulatedPlayerFallingTicks: Map<SimulatedPlayerManager, number> = new Map();
+
+const excludeTypes = [
+    "fishing_hook",
+    "arrow",
+    "thrown_trident",
+    "snowball",
+    "egg",
+    "ender_pearl",
+    "area_effect_cloud",
+    "item",
+    "xp_orb",
+    "xp_bottle",
+    "splash_potion",
+    "lingering_potion",
+    "fireball",
+    "small_fireball",
+    "minecart",
+    "chest_minecart",
+    "hopper_minecart",
+    "tnt_minecart",
+    "command_block_minecart",
+    "boat",
+    "chest_boat",
+    "dragon_fireball",
+    "wither_skull",
+    "wither_skull_dangerous",
+    "falling_block",
+    "tnt",
+    "ender_crystal",
+    "evocation_fang",
+    "lightning_bolt",
+    "fireworks_rocket",
+    "painting",
+    "shulker_bullet",
+    "npc",
+    "leash_knot",
+    "llama_spit",
+    "eye_of_ender_signal",
+    "armor_stand",
+    "wind_charge_projectile"
+];
 
 system.runInterval(() => {
     for (const playerManager of SimulatedPlayerManager.getManagers()) {
+
+        if (playerManager.getAsGameTestPlayer().isFalling) {
+            const ticks = simulatedPlayerFallingTicks.get(playerManager);
+            if (ticks === undefined) {
+                simulatedPlayerFallingTicks.set(playerManager, 1);
+            }
+            else {
+                simulatedPlayerFallingTicks.set(playerManager, ticks + 1);
+            }
+        }
+        else {
+            simulatedPlayerFallingTicks.set(playerManager, 0);
+        }
+
         if (!playerManager.ai) {
             if (system.currentTick % 20 === 0) {
                 playerManager.getAsGameTestPlayer().stopMoving();
@@ -391,7 +503,16 @@ system.runInterval(() => {
 
         const player = playerManager.getAsGameTestPlayer();
 
-        const entities = player.dimension.getEntities({ location: location, maxDistance: 20, excludeNames: [player.name] });
+        const entities = player.dimension.getEntities({ location: location, maxDistance: 20, excludeTypes })
+        .filter(entity => {
+            if (entity.id === player.id) return false;
+
+            if (entity instanceof Player) {
+                return entity.getGameMode() !== GameMode.creative;
+            }
+
+            return true;
+        });
 
         const target = entities[0];
 
@@ -404,16 +525,37 @@ system.runInterval(() => {
                 player.jump();
                 player.isSneaking = false;
                 handledMap.set(playerManager, false);
-            }, 8);
+            }, 10);
         }
 
         if (entities.length > 0 && distance < 5) {
-            if (playerManager.getFallingTicks() > 1) {
+            if ((simulatedPlayerFallingTicks.get(playerManager) ?? 0) > 1) {
                 player.attackEntity(target);
             }
         }
         else if (entities.length > 0 && distance > 3 && distance < 9) {
             player.useItem(new ItemStack("snowball", 1));
+        }
+
+        const dir = Vector3Builder.from(player.getViewDirection());
+        dir.y = 0;
+        dir.scale(0.5);
+
+        const forward = Vector3Builder.from(player.location)
+        .add({ x: 0, y: 1, z: 0 })
+        .add(dir);
+
+        const dim = playerManager.getAsServerPlayer().dimension;
+
+        const blocks = [
+            dim.getBlock(forward),
+            dim.getBlock(forward.clone().add(dir.getRotation2d().getLocalAxisProvider().getX().scale(0.5))),
+            dim.getBlock(forward.clone().add(dir.getRotation2d().getLocalAxisProvider().getX().scale(-0.5)))
+        ];
+
+        if (blocks.some(block => block.isSolid) && (player.getVelocity().x === 0 || player.getVelocity().z === 0)) {
+            player.jump();
+            player.applyKnockback(player.getViewDirection().x, player.getViewDirection().z, 0.6, player.getVelocity().y);
         }
 
         if (entities.length > 0 && distance < 3) {
@@ -465,6 +607,7 @@ system.runInterval(() => {
                 const v = Vector3Builder.from(location).getDirectionTo(target.location);
                 player.setRotation(v.getRotation2d());
                 player.moveRelative(0, 1);
+
                 if (system.currentTick % 20 === 0) {
                     player.isSprinting = true;
                 }
