@@ -1,34 +1,8 @@
 import { Block, BlockPermutation, ContainerSlot, Entity, EntityComponentTypes, EquipmentSlot, GameMode, ItemComponentTypes, ItemStack, Player, system, world } from "@minecraft/server";
 import { Material, MaterialTag } from "./lib/Material";
-import { Vector3Builder } from "./util/Vector";
-
-function choiceByWeight(list: number[]): number {
-    const summary = list.reduce((a, b) => a + b);
-    const random = Math.floor(Math.random() * summary) + 1;
-
-    let totalWeight = 0;
-    for (const [index, weight] of list.entries()) {
-        totalWeight += weight;
-        if (totalWeight >= random) return index;
-    }
-}
-
-function uuid(): string {
-    const chars = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.split('');
-
-        for (let i = 0; i < chars.length; i++) {
-            switch (chars[i]) {
-                case 'x':
-                    chars[i] = Math.floor(Math.random() * (15 + 1 - 0) + 0).toString(16);
-                    break;
-                case 'y':
-                    chars[i] = Math.floor(Math.random() * (11 + 1 - 8) + 8).toString(16);
-                    break;
-            }
-        }
-
-        return chars.join('');
-}
+import { TripleAxisRotationBuilder, Vector3Builder } from "./util/Vector";
+import { RandomNumberHandler } from "./util/Random";
+import { SimulatedPlayerManager } from "./SimulatedPlayerManager";
 
 interface MineCutAllEventListeners {
     readonly onComplete: Set<() => void>;
@@ -102,7 +76,7 @@ class MineCutAllHandler {
                 break;
         }
     
-        return choiceByWeight(chanceList) + initialCount;
+        return RandomNumberHandler.choiceByWeight(chanceList) + initialCount;
     }
 
     private tryActivateUnbreaking(): boolean {
@@ -186,7 +160,7 @@ class MineCutAllHandler {
         for (const block of this.getBlocks(source, center, entry.getTargetIds(), entry.distance())) {
             if (!this.selectedItemIsValid()) break;
 
-            const id = uuid();
+            const id = RandomNumberHandler.uuid();
             this.queues.add(id);
 
             const [droppedItemEntities, permutation] = this.destroyBlock(block);
@@ -434,25 +408,26 @@ world.afterEvents.playerBreakBlock.subscribe(({ player, brokenBlockPermutation, 
         ...MineCutAllEntry.getMineAll(),
         ...MineCutAllEntry.getUncommonStones()
     );
-    handler.addEventListener("onComplete", () => {
-        console.warn("completed");
-    });
-    handler.addEventListener("onBreakTool", () => {
-        console.warn("broken");
-    });
 
     handler.tryTrigger(brokenBlockPermutation, block);
 });
 
-world.afterEvents.chatSend.subscribe(event => {
-    if (event.message.startsWith("@js")) {
-        const code = event.message.split(/\s+/g).slice(1).join(" ");
-        try {
-            const player = event.sender;
-            eval(code);
-        }
-        catch (e) {
-            world.sendMessage("§cError: " + (e?.message ? e.message : e));
-        }
+SimulatedPlayerManager.requestSpawnPlayer({
+    name: "Steve",
+    onCreate(player, time) {
+        console.warn(player.getAsServerPlayer().name + " joined. (" + time + "ms)");
+        player.ai = true;
+    }
+});
+
+SimulatedPlayerManager.events.on("onDie", event => {
+    system.runTimeout(() => {
+        event.simulatedPlayerManager.getAsGameTestPlayer().respawn();
+    }, 40);
+});
+
+system.afterEvents.scriptEventReceive.subscribe(event => {
+    if (event.id === "simulated_player:manager" && event.sourceEntity instanceof Player) {
+        SimulatedPlayerManager.showAsForm(event.sourceEntity);
     }
 });

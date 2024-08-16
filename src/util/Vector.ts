@@ -67,14 +67,14 @@ export class Vector3Builder implements Vector3 {
 
     public operate(a: Vector3 | ((comopnent: number) => number), b?: (comopnent1: number, comopnent2: number) => number): Vector3Builder {
         if (typeof a === "function" && b === undefined) {
-            a(this.__x__);
-            a(this.__y__);
-            a(this.__z__);
+            this.__x__ = a(this.__x__);
+            this.__y__ = a(this.__y__);
+            this.__z__ = a(this.__z__);
         }
         else if (Vector3Builder.isValidVector3(a) && typeof b === "function") {
-            b(this.__x__, a.x);
-            b(this.__y__, a.y);
-            b(this.__z__, a.z);
+            this.__x__ = b(this.__x__, a.x);
+            this.__y__ = b(this.__y__, a.y);
+            this.__z__ = b(this.__z__, a.z);
         }
         else {
             throw new TypeError();
@@ -147,6 +147,11 @@ export class Vector3Builder implements Vector3 {
         }
         else if (isValidNumber(length)) {
             const previous = this.length();
+
+            if (previous === 0) {
+                return this;
+            }
+
             return this.operate(component => component / previous * length);
         }
         else {
@@ -330,19 +335,19 @@ export class TripleAxisRotationBuilder implements Vector2 {
     }
 
     public get x(): number {
-        return this.yaw;
-    }
-
-    public set x(value) {
-        this.yaw = value;
-    } 
-
-    public get y(): number {
         return this.pitch;
     }
 
-    public set y(value) {
+    public set x(value) {
         this.pitch = value;
+    } 
+
+    public get y(): number {
+        return this.yaw;
+    }
+
+    public set y(value) {
+        this.yaw = value;
     }
 
     public get yaw(): number {
@@ -387,18 +392,18 @@ export class TripleAxisRotationBuilder implements Vector2 {
 
     public operate(a: Vector2 | ((comopnent: number) => number), b?: (comopnent1: number, comopnent2: number) => number): TripleAxisRotationBuilder {
         if (typeof a === "function" && b === undefined) {
-            a(this.__yaw__);
-            a(this.__pitch__);
-            a(this.__roll__);
+            this.__yaw__ = a(this.__yaw__);
+            this.__pitch__ = a(this.__pitch__);
+            this.__roll__ = a(this.__roll__);
         }
         else if (a instanceof TripleAxisRotationBuilder && typeof b === "function") {
-            b(this.__yaw__, a.__yaw__);
-            b(this.__pitch__, a.__pitch__);
-            b(this.__roll__, a.__roll__);
+            this.__yaw__ = b(this.__yaw__, a.__yaw__);
+            this.__pitch__ = b(this.__pitch__, a.__pitch__);
+            this.__roll__ = b(this.__roll__, a.__roll__);
         }
         else if (TripleAxisRotationBuilder.isValidVector2(a) && typeof b === "function") {
-            b(this.__yaw__, a.x);
-            b(this.__pitch__, a.y);
+            this.__yaw__ = b(this.__yaw__, a.y);
+            this.__pitch__ = b(this.__pitch__, a.x);
         }
         else {
             throw new TypeError();
@@ -489,7 +494,7 @@ export class TripleAxisRotationBuilder implements Vector2 {
     }
 
     public static from(vector2: Vector2): TripleAxisRotationBuilder {
-        return new TripleAxisRotationBuilder(vector2.x, vector2.y, 0);
+        return new TripleAxisRotationBuilder(vector2.y, vector2.x, 0);
     }
 }
 
