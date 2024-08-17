@@ -1,6 +1,6 @@
 import { NumberRange } from "@minecraft/common";
 
-export class RandomNumberHandler {
+export class RandomHandler {
     private constructor() {}
 
     public static generate(range: NumberRange) {

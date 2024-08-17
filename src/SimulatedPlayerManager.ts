@@ -1,11 +1,11 @@
-import { BlockVolume, EntityComponentTypes, EntityDamageSource, EntityQueryOptions, EquipmentSlot, GameMode, ItemStack, Player, system, Vector3, world } from "@minecraft/server";
+import { Block, EntityComponentTypes, EntityDamageSource, EntityQueryOptions, EquipmentSlot, GameMode, ItemStack, LocationOutOfWorldBoundariesError, Player, System, system, UnloadedChunksError, Vector3, world } from "@minecraft/server";
 
 import { register, SimulatedPlayer } from "@minecraft/server-gametest";
 
 import { MinecraftDimensionTypes } from "./lib/@minecraft/vanilla-data/lib/index";
 
 import { ActionFormWrapper, MessageFormWrapper, ModalFormWrapper } from "./lib/UI";
-import { TripleAxisRotationBuilder, Vector3Builder } from "./util/Vector";
+import { Vector3Builder } from "./util/Vector";
 import { Material } from "./lib/Material";
 
 export interface SimulatedPlayerSpawnRequest {
@@ -15,14 +15,18 @@ export interface SimulatedPlayerSpawnRequest {
 
     readonly gameMode?: GameMode;
 
-    onCreate(manager: SimulatedPlayerManager, requiredTimeToSpawn: number): void;
+    onCreate?(manager: SimulatedPlayerManager, timeTakenToSpawn: number): void;
 }
 
 interface SimulatedPlayerSpawnRequestInternalInfo extends SimulatedPlayerSpawnRequest {
-    readonly requestTime: number;
+    readonly time: number;
+
+    newManager(player: SimulatedPlayer): SimulatedPlayerManager;
 }
 
 const nextSpawnRequestQueue: SimulatedPlayerSpawnRequestInternalInfo[] = [];
+
+let ok: boolean = true;
 
 register("simulated_player", "spawn", test => {
     if (nextSpawnRequestQueue.length === 0) {
@@ -37,8 +41,12 @@ register("simulated_player", "spawn", test => {
         request.gameMode ?? GameMode.survival
     );
 
-    player.teleport(request.spawnPoint ?? { x: 0.5, y: -60, z: 0.5 });
-    request.onCreate(new SimulatedPlayerManager(player), Date.now() - request.requestTime);
+    player.teleport(request.spawnPoint ?? Vector3Builder.from(world.getDefaultSpawnLocation()).add({ x: 0.5, y: 0.5, z: 0.5 }));
+
+    if (typeof request.onCreate === "function") {
+        request.onCreate(request.newManager(player), Date.now() - request.time);
+        ok = true;
+    }
 })
 .structureName("simulated_player:")
 .maxTicks(2147483647);
@@ -81,7 +89,13 @@ type SimulatedPlayerEventTypes = {
     readonly onHurt: SimulatedPlayerHurtEvent;
 }
 
-enum SimulatedPlayerArmorMaterial {
+interface SimulatedPlayerCommonConfig {
+    blockLifespanSeconds: number;
+
+    followRange: number;
+}
+
+export enum SimulatedPlayerArmorMaterial {
     NONE = "none",
     LEATHER = "leather",
     GOLDEN = "golden",
@@ -91,7 +105,7 @@ enum SimulatedPlayerArmorMaterial {
     NETHERITE = "netherite"
 }
 
-enum SimulatedPlayerWeaponMaterial {
+export enum SimulatedPlayerWeaponMaterial {
     NONE = "none",
     WOODEN = "wooden",
     GOLDEN = "golden",
@@ -108,7 +122,7 @@ export class SimulatedPlayerManager {
 
     private __weapon__: SimulatedPlayerWeaponMaterial = SimulatedPlayerWeaponMaterial.NONE;
 
-    private __ai__: boolean = true;
+    private __ai__: boolean = false;
 
     public get ai(): boolean {
         return this.__ai__;
@@ -118,7 +132,7 @@ export class SimulatedPlayerManager {
         this.__ai__ = flag;
     }
 
-    public constructor(player: SimulatedPlayer) {
+    private constructor(player: SimulatedPlayer) {
         this.player = player;
         simulatedPlayerManagers.add(this);
     }
@@ -175,8 +189,26 @@ export class SimulatedPlayerManager {
     }
 
     public static requestSpawnPlayer(request: SimulatedPlayerSpawnRequest): void {
-        nextSpawnRequestQueue.push({ requestTime: Date.now(), ...request });
-        world.getDimension(MinecraftDimensionTypes.Overworld).runCommand("execute positioned 0.0 0.0 100000.0 run gametest run simulated_player:spawn");
+        this.requestInternal({
+            time: Date.now(),
+            newManager(player) {
+                return new SimulatedPlayerManager(player);
+            },
+            ...request
+        });
+    }
+
+    private static requestInternal(request: SimulatedPlayerSpawnRequestInternalInfo) {
+        if (ok) {
+            nextSpawnRequestQueue.push(request);
+            ok = false;
+            world.getDimension(MinecraftDimensionTypes.Overworld).runCommand("execute positioned 0.0 0.0 100000.0 run gametest run simulated_player:spawn");
+        }
+        else {
+            system.run(() => {
+                this.requestInternal(request);
+            });
+        }
     }
 
     public static getManagers(options?: EntityQueryOptions): Set<SimulatedPlayerManager> {
@@ -215,9 +247,38 @@ export class SimulatedPlayerManager {
         }
     };
 
+    public static readonly commonConfig: SimulatedPlayerCommonConfig = {
+        get blockLifespanSeconds(): number {
+            return internalConfig.blockLifespanSeconds;
+        },
+
+        set blockLifespanSeconds(value) {
+            if (typeof value === "number" && !Number.isNaN(value) && Number.isInteger(value)) {
+                internalConfig.blockLifespanSeconds = value;
+            }
+            else throw new TypeError();
+        },
+
+        get followRange(): number {
+            return internalConfig.followRange;
+        },
+
+        set followRange(value) {
+            if (typeof value === "number" && !Number.isNaN(value) && Number.isInteger(value)) {
+                internalConfig.followRange = value;
+            }
+            else throw new TypeError();
+        }
+    };
+
     public static showAsForm(player: Player) {
         form.main().open(player);
     }
+}
+
+const internalConfig: SimulatedPlayerCommonConfig = {
+    blockLifespanSeconds: 3,
+    followRange: 20
 }
 
 const form = {
@@ -247,7 +308,7 @@ const form = {
             SimulatedPlayerManager.requestSpawnPlayer({
                 name: event.getTextField("name"),
                 onCreate(player, time) {
-                    event.player.sendMessage("召喚に成功しました");
+                    player.ai = true;
                     console.warn(player.getAsServerPlayer().name + " joined. (" + time + "ms)");
                 }
             });
@@ -266,17 +327,20 @@ const form = {
     },
 
     list(callback: (manager: SimulatedPlayerManager) => void): ActionFormWrapper {
-        const form = new ActionFormWrapper();
-        form.title("List of Simulated Player");
+        const list = new ActionFormWrapper();
+        list.title("List of Simulated Player");
         for (const player of SimulatedPlayerManager.getManagers()) {
-            form.button("§6" + player.getAsGameTestPlayer().name, ["player", player.getAsGameTestPlayer().id]);
+            list.button("§6" + player.getAsGameTestPlayer().name, ["player", player.getAsGameTestPlayer().id]);
         }
-        form.onPush(button => button.tags.includes("player"), event => {
+        list.button("Back", "textures/ui/back_button_default", player => {
+            form.main().open(player);
+        })
+        .onPush(button => button.tags.includes("player"), event => {
             const manager = SimulatedPlayerManager.getById(event.button.tags[1]);
             if (manager === undefined) return;
             callback(manager);
         });
-        return form;
+        return list;
     },
 
     config(manager: SimulatedPlayerManager): ModalFormWrapper {
@@ -364,7 +428,9 @@ world.afterEvents.entityHealthChanged.subscribe(event => {
     if (manager === undefined) return;
     if (!manager.isValid()) return;
 
-    manager.getAsGameTestPlayer().nameTag = `${manager.getAsGameTestPlayer().name}\n§r§cHealth: §f${event.newValue < 0 ? 0 : event.newValue}`;
+    const value = event.newValue < 0 ? 0 : Math.floor(event.newValue * 10) / 10;
+
+    manager.getAsGameTestPlayer().nameTag = `${manager.getAsGameTestPlayer().name}\n§r§cHealth: §f${value}`;
 
     SimulatedPlayerEventHandlerRegistry.get("onHealthChange").call({
         "currentValue": event.newValue,
@@ -391,7 +457,7 @@ world.afterEvents.playerSpawn.subscribe(event => {
     if (manager === undefined) return;
     if (!manager.isValid()) return;
 
-    manager.getAsGameTestPlayer().teleport({ x: 0.5, y: -60, z: 0.5 });
+    manager.getAsGameTestPlayer().teleport(Vector3Builder.from(world.getDefaultSpawnLocation()).add({ x: 0.5, y: 0, z: 0.5 }));
     manager.getAsServerPlayer().selectedSlotIndex = 0;
 
     system.runTimeout(() => {
@@ -503,7 +569,7 @@ system.runInterval(() => {
 
         const player = playerManager.getAsGameTestPlayer();
 
-        const entities = player.dimension.getEntities({ location: location, maxDistance: 20, excludeTypes })
+        const entities = player.dimension.getEntities({ location: location, maxDistance: internalConfig.followRange, excludeTypes })
         .filter(entity => {
             if (entity.id === player.id) return false;
 
@@ -528,13 +594,10 @@ system.runInterval(() => {
             }, 10);
         }
 
-        if (entities.length > 0 && distance < 5) {
+        if (entities.length > 0 && distance < 6.5) {
             if ((simulatedPlayerFallingTicks.get(playerManager) ?? 0) > 1) {
                 player.attackEntity(target);
             }
-        }
-        else if (entities.length > 0 && distance > 3 && distance < 9) {
-            player.useItem(new ItemStack("snowball", 1));
         }
 
         const dir = Vector3Builder.from(player.getViewDirection());
@@ -551,20 +614,29 @@ system.runInterval(() => {
             dim.getBlock(forward),
             dim.getBlock(forward.clone().add(dir.getRotation2d().getLocalAxisProvider().getX().scale(0.5))),
             dim.getBlock(forward.clone().add(dir.getRotation2d().getLocalAxisProvider().getX().scale(-0.5)))
-        ];
+        ]
+        .filter(b => b !== undefined);
 
         if (blocks.some(block => block.isSolid) && (player.getVelocity().x === 0 || player.getVelocity().z === 0)) {
             player.jump();
             player.applyKnockback(player.getViewDirection().x, player.getViewDirection().z, 0.6, player.getVelocity().y);
         }
 
-        if (entities.length > 0 && distance < 3) {
-            const direction = Vector3Builder.from(location).getDirectionTo(target.location);
-            const localAxisProvider = direction.getRotation2d().getLocalAxisProvider();
-            const knockback = localAxisProvider.getX().add(localAxisProvider.getZ().scale(0.1));
+        if (entities.length > 0 && distance < 4) {
+            const forward = Vector3Builder.from(location)
+            .getDirectionTo(target.location)
+            .getRotation2d();
+
+            const direction = forward
+            .getLocalAxisProvider()
+            .getX();
+
+            player.setRotation(forward);
+
+            playerManager.getAsServerPlayer().selectedSlotIndex = 0;
 
             if (player.isOnGround) {
-                player.applyKnockback(knockback.x, knockback.z, 0.6, player.getVelocity().y);
+                player.applyKnockback(direction.x, direction.z, 0.65, player.getVelocity().y);
                 player.isSneaking = true;
             }
         }
@@ -578,26 +650,24 @@ system.runInterval(() => {
 
                     player.stopMoving();
                     player.isSprinting = false;
-                    block.setType(Material.COBBLESTONE.getAsBlockType());
-                    system.runTimeout(() => {
-                        block.setType(Material.AIR.getAsBlockType());
-                    }, 40);
+                    putTemporaryBlock(player, block);
                 }, 6);
             }
 
             function placeBlockAsPath() {
                 const block = playerManager.getAsServerPlayer().dimension.getBlock(location).below();
                 if (!block.isSolid && !block.below().isSolid && player.isOnGround) {
-                    block.setType(Material.COBBLESTONE.getAsBlockType());
-                    system.runTimeout(() => {
-                        block.setType(Material.AIR.getAsBlockType());
-                    }, 40);
+                    putTemporaryBlock(player, block);
                 }
             }
 
             if (target.location.y - location.y > 2) {
                 player.stopMoving();
-                if (system.currentTick % 10 === 0) placeBlockAndJump();
+                if (system.currentTick % 10 === 0) {
+                    player.setRotation(Vector3Builder.from({ x: 0, y: -1, z: 0 }).getRotation2d());
+                    player.setItem(new ItemStack("cobblestone"), 3, true);
+                    placeBlockAndJump();
+                }
             }
             else {
                 if (Math.abs(target.location.y - location.y) <= 2) {
@@ -607,6 +677,15 @@ system.runInterval(() => {
                 const v = Vector3Builder.from(location).getDirectionTo(target.location);
                 player.setRotation(v.getRotation2d());
                 player.moveRelative(0, 1);
+
+                if (distance > 5 && distance < 9) {
+                    player.setItem(new ItemStack("snowball"), 2, true);
+                    player.useItemInSlot(2);
+                }
+                else if (distance > 14 && distance < 16) {
+                    player.setItem(new ItemStack("ender_pearl"), 3, true);
+                    player.useItemInSlot(3);
+                }
 
                 if (system.currentTick % 20 === 0) {
                     player.isSprinting = true;
@@ -620,3 +699,62 @@ system.runInterval(() => {
         }
     }
 });
+
+system.runInterval(() => {
+    const temporaryBlocks: TemporaryBlock[] = JSON.parse((world.getDynamicProperty("simulated_player:temporary_blocks") ?? "[]") as string);
+
+    for (const info of temporaryBlocks) {
+        try {
+            const block = world.getDimension(info.dimensionId).getBlock(info.location);
+            if (block.permutation.type.id === Material.COBBLESTONE.getAsBlockType().id) {
+                if (info.seconds > 0) {
+                    info.seconds--;
+                }
+                else {
+                    const { x, y, z } = block.location;
+                    const items = block.dimension.getEntities({ type: "minecraft:item" });
+                    block.dimension.runCommand(`setblock ${x} ${y} ${z} air destroy`);
+                    block.dimension.getEntities({ type: "minecraft:item" }).forEach(item => {
+                        if (!items.includes(item)) {
+                            item.remove();
+                        }
+                    });
+                    temporaryBlocks.splice(temporaryBlocks.indexOf(info), 1);
+                }
+            }
+            else {
+                temporaryBlocks.splice(temporaryBlocks.indexOf(info), 1);
+            }
+        }
+        catch (e) {
+            if (e instanceof UnloadedChunksError || e instanceof LocationOutOfWorldBoundariesError) {
+                continue;
+            }
+            else {
+                throw e;
+            }
+        }
+    }
+
+    world.setDynamicProperty("simulated_player:temporary_blocks", JSON.stringify(temporaryBlocks));
+}, 20);
+
+interface TemporaryBlock {
+    readonly location: Vector3;
+
+    readonly dimensionId: string;
+
+    seconds: number;
+}
+
+function putTemporaryBlock(player: SimulatedPlayer, block: Block) {
+    player.attack();
+    block.setType(Material.COBBLESTONE.getAsBlockType());
+    const temporaryBlocks: TemporaryBlock[] = JSON.parse((world.getDynamicProperty("simulated_player:temporary_blocks") ?? "[]") as string);
+    temporaryBlocks.push({
+        dimensionId: block.dimension.id,
+        location: block.location,
+        seconds: internalConfig.blockLifespanSeconds
+    });
+    world.setDynamicProperty("simulated_player:temporary_blocks", JSON.stringify(temporaryBlocks));
+}

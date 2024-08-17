@@ -1,8 +1,8 @@
 import { Block, BlockPermutation, ContainerSlot, Entity, EntityComponentTypes, EquipmentSlot, GameMode, ItemComponentTypes, ItemStack, Player, system, world } from "@minecraft/server";
 import { Material, MaterialTag } from "./lib/Material";
-import { TripleAxisRotationBuilder, Vector3Builder } from "./util/Vector";
-import { RandomNumberHandler } from "./util/Random";
-import { SimulatedPlayerManager } from "./SimulatedPlayerManager";
+import { Vector3Builder } from "./util/Vector";
+import { RandomHandler } from "./util/Random";
+import { SimulatedPlayerArmorMaterial, SimulatedPlayerManager, SimulatedPlayerWeaponMaterial } from "./SimulatedPlayerManager";
 
 interface MineCutAllEventListeners {
     readonly onComplete: Set<() => void>;
@@ -76,7 +76,7 @@ class MineCutAllHandler {
                 break;
         }
     
-        return RandomNumberHandler.choiceByWeight(chanceList) + initialCount;
+        return RandomHandler.choiceByWeight(chanceList) + initialCount;
     }
 
     private tryActivateUnbreaking(): boolean {
@@ -160,7 +160,7 @@ class MineCutAllHandler {
         for (const block of this.getBlocks(source, center, entry.getTargetIds(), entry.distance())) {
             if (!this.selectedItemIsValid()) break;
 
-            const id = RandomNumberHandler.uuid();
+            const id = RandomHandler.uuid();
             this.queues.add(id);
 
             const [droppedItemEntities, permutation] = this.destroyBlock(block);
@@ -412,22 +412,52 @@ world.afterEvents.playerBreakBlock.subscribe(({ player, brokenBlockPermutation, 
     handler.tryTrigger(brokenBlockPermutation, block);
 });
 
-SimulatedPlayerManager.requestSpawnPlayer({
-    name: "Steve",
-    onCreate(player, time) {
-        console.warn(player.getAsServerPlayer().name + " joined. (" + time + "ms)");
-        player.ai = true;
-    }
-});
-
 SimulatedPlayerManager.events.on("onDie", event => {
     system.runTimeout(() => {
+        if (!event.simulatedPlayerManager.isValid()) return;
         event.simulatedPlayerManager.getAsGameTestPlayer().respawn();
     }, 40);
 });
 
 system.afterEvents.scriptEventReceive.subscribe(event => {
-    if (event.id === "simulated_player:manager" && event.sourceEntity instanceof Player) {
-        SimulatedPlayerManager.showAsForm(event.sourceEntity);
+    const [namespace, id] = event.id.split(":");
+
+    if (!(namespace === "simulated_player" && event.sourceEntity instanceof Player)) return;
+
+    const player = event.sourceEntity;
+
+    switch (id) {
+        case "manager": {
+            SimulatedPlayerManager.showAsForm(player);
+            break;
+        }
+        case "spawn": {
+            SimulatedPlayerManager.requestSpawnPlayer({
+                name: event.message,
+                onCreate(player) {
+                    player.ai = true;
+                    player.weapon = SimulatedPlayerWeaponMaterial.WOODEN;
+                    player.armor = SimulatedPlayerArmorMaterial.LEATHER;
+                }
+            });
+            break;
+        }
+        case "chaos": {
+            SimulatedPlayerManager.getManagers().forEach(manager => manager.getAsGameTestPlayer().disconnect());
+            for (let i = 0; i < 8; i++) {
+                SimulatedPlayerManager.requestSpawnPlayer({
+                    name: RandomHandler.uuid(),
+                    onCreate(player, time) {
+                        player.ai = true;
+                        player.weapon = SimulatedPlayerWeaponMaterial.DIAMOND;
+                        player.armor = SimulatedPlayerArmorMaterial.DIAMOND;
+                        console.warn(time);
+                    }
+                });
+            }
+            break;
+        }
     }
 });
+
+SimulatedPlayerManager.commonConfig.followRange = 40;
