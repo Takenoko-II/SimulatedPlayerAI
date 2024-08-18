@@ -1,6 +1,6 @@
 import { Block, BlockPermutation, ContainerSlot, Entity, EntityComponentTypes, EquipmentSlot, GameMode, ItemComponentTypes, ItemStack, Player, system, world } from "@minecraft/server";
 import { Material, MaterialTag } from "./lib/Material";
-import { Vector3Builder } from "./util/Vector";
+import { TripleAxisRotationBuilder, Vector3Builder } from "./util/Vector";
 import { RandomHandler } from "./util/Random";
 import { SimulatedPlayerArmorMaterial, SimulatedPlayerManager, SimulatedPlayerWeaponMaterial } from "./SimulatedPlayerManager";
 
@@ -140,7 +140,7 @@ class MineCutAllHandler {
         ]
         .flatMap(block => [block.above(), block, block.below()])
         .filter(block => {
-            const distance = Vector3Builder.from(block.location).getDistanceBetween(Vector3Builder.from(source.location));
+            const distance = Vector3Builder.from(block.location).getDistanceTo(Vector3Builder.from(source.location));
             return filter.includes(block.typeId)
                 && distance < limitDistance;
         });

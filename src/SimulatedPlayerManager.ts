@@ -582,7 +582,7 @@ system.runInterval(() => {
 
         const target = entities[0];
 
-        const distance = target ? Vector3Builder.from(location).getDistanceBetween(target.location) : 0;
+        const distance = target ? Vector3Builder.from(location).getDistanceTo(target.location) : 0;
 
         if (player.isSneaking && !(handledMap.get(playerManager) ?? false)) {
             handledMap.set(playerManager, true);
