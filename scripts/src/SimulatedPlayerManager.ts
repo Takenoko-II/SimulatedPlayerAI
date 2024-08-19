@@ -9,13 +9,30 @@ import { Vector3Builder } from "./util/Vector";
 import { Material } from "./lib/Material";
 import { RandomHandler } from "./util/Random";
 
+/**
+ * プレイヤー召喚リクエスト
+ */
 export interface SimulatedPlayerSpawnRequest {
+    /**
+     * プレイヤー名
+     */
     readonly name: string;
 
+    /**
+     * スポーンさせる位置(リスポーンポイントじゃないよ！)
+     */
     readonly spawnPoint?: Vector3;
 
+    /**
+     * ゲームモード(サバイバル推奨)
+     */
     readonly gameMode?: GameMode;
 
+    /**
+     * プレイヤーが作成された瞬間実行される関数
+     * @param manager 作成されたプレイヤーを表現するSimulatedPlayerManagerクラスのインスタンス
+     * @param timeTakenToSpawn リクエスト送信から作成までにかかった時間
+     */
     onCreate?(manager: SimulatedPlayerManager, timeTakenToSpawn: number): void;
 }
 
@@ -53,12 +70,25 @@ register("simulated_player", "spawn", test => {
 .maxTicks(2147483647);
 
 interface SimulatedPlayerEventHandlerRegistrar {
+    /**
+     * イベント登録用関数
+     * @param event イベントの種類
+     * @param listener イベントリスナー
+     * @returns 登録解除用のid
+     */
     on<T extends keyof SimulatedPlayerEventTypes>(event: T, listener: (event: SimulatedPlayerEventTypes[T]) => void): number;
 
+    /**
+     * イベント登録解除用関数
+     * @param id events.on()が返す数値id
+     */
     off(id: number): void;
 }
 
 interface SimulatedPlayerEvent {
+    /**
+     * このイベントを発火させたプレイヤー
+     */
     readonly simulatedPlayerManager: SimulatedPlayerManager;
 }
 
@@ -107,10 +137,19 @@ type SimulatedPlayerEventTypes = {
 }
 
 interface SimulatedPlayerCommonConfig {
+    /**
+     * プレイヤーが設置したブロックが壊れるまでの秒数
+     */
     blockLifespanSeconds: number;
 
+    /**
+     * プレイヤーの球形索敵範囲の半径
+     */
     followRange: number;
 
+    /**
+     * プレイヤーが設置するブロックの種類
+     */
     blockMaterial: Material;
 }
 
@@ -139,6 +178,9 @@ export enum SimulatedPlayerAI {
     COMBAT = "combat"
 }
 
+/**
+ * SimulatedPlayer操作のメインクラス
+ */
 export class SimulatedPlayerManager {
     private readonly player: SimulatedPlayer;
 
@@ -152,6 +194,9 @@ export class SimulatedPlayerManager {
 
     private __ai__: SimulatedPlayerAI = SimulatedPlayerAI.NONE;
 
+    /**
+     * AIの種類
+     */
     public get ai(): SimulatedPlayerAI {
         return this.__ai__;
     }
@@ -165,14 +210,23 @@ export class SimulatedPlayerManager {
         simulatedPlayerManagers.add(this);
     }
 
+    /**
+     * このインスタンスが表現するプレイヤーをSimulatedPlayerとして取得する関数
+     */
     public getAsGameTestPlayer(): SimulatedPlayer {
         return this.player;
     }
 
+    /**
+     * このインスタンスが表現するプレイヤーをPlayerとして取得する関数
+     */
     public getAsServerPlayer(): Player {
         return world.getPlayers().filter(player => player.id === this.player.id)[0];
     }
 
+    /**
+     * プレイヤーの防具
+     */
     public get armor(): SimulatedPlayerArmorMaterial {
         return this.__armor__;
     }
@@ -196,6 +250,9 @@ export class SimulatedPlayerManager {
         }
     }
 
+    /**
+     * プレイヤーの武器
+     */
     public get weapon(): SimulatedPlayerWeaponMaterial {
         return this.__weapon__;
     }
@@ -212,6 +269,9 @@ export class SimulatedPlayerManager {
         }
     }
 
+    /**
+     * プレイヤーが使う中距離武器
+     */
     public get projectile(): ItemStack {
         return this.__projectile__;
     }
@@ -220,6 +280,9 @@ export class SimulatedPlayerManager {
         this.__projectile__ = value;
     }
 
+    /**
+     * これがtrueだとプレイヤーはエンダーパールを使う
+     */
     public get canUseEnderPearl(): boolean {
         return this.__canUseEnderPearl__;
     }
@@ -228,10 +291,16 @@ export class SimulatedPlayerManager {
         this.__canUseEnderPearl__ = value;
     }
 
+    /**
+     * Player#isValid() && SimulatedPlayer#isValid()を返す関数
+     */
     public isValid(): boolean {
         return this.player.isValid() && this.getAsServerPlayer().isValid();
     }
 
+    /**
+     * プレイヤーをワールドに召喚するよう要求する関数
+     */
     public static requestSpawnPlayer(request: SimulatedPlayerSpawnRequest): void {
         this.requestInternal({
             time: Date.now(),
@@ -255,6 +324,10 @@ export class SimulatedPlayerManager {
         }
     }
 
+    /**
+     * 条件に一致するSimulatedPlayerManagerをすべて取得する
+     * @param options EntityQueryOptionsが使えるよ
+     */
     public static getManagers(options?: EntityQueryOptions): Set<SimulatedPlayerManager> {
         const set: Set<SimulatedPlayerManager> = new Set();
 
@@ -272,6 +345,11 @@ export class SimulatedPlayerManager {
         return set;
     }
 
+    /**
+     * Entity#idからこのクラスのインスタンスを取得する関数
+     * @param id Entity#idで取れる文字列
+     * @returns 見つからなければundefined
+     */
     public static getById(id: string): SimulatedPlayerManager | undefined {
         for (const playerManager of simulatedPlayerManagers) {
             if (playerManager.player.id === id) {
@@ -282,6 +360,9 @@ export class SimulatedPlayerManager {
         return undefined;
     }
 
+    /**
+     * SimulatedPlayerに関するイベントを登録したり登録解除できたりするやつ
+     */
     public static readonly events: SimulatedPlayerEventHandlerRegistrar = {
         on(event, listener) {
             return SimulatedPlayerEventHandlerRegistry.get(event).add(listener);
@@ -292,7 +373,11 @@ export class SimulatedPlayerManager {
         }
     };
 
+    /**
+     * すべてのSimulatedPlayerに共通する設定を扱う
+     */
     public static readonly commonConfig: SimulatedPlayerCommonConfig = {
+        
         get blockLifespanSeconds(): number {
             return internalCommonConfig.blockLifespanSeconds;
         },
@@ -304,6 +389,7 @@ export class SimulatedPlayerManager {
             else throw new TypeError();
         },
 
+        
         get followRange(): number {
             return internalCommonConfig.followRange;
         },
@@ -328,6 +414,10 @@ export class SimulatedPlayerManager {
         }
     };
 
+    /**
+     * このクラスをフォームとしてプレイヤーに表示する関数
+     * @param player フォームを表示すす対象
+     */
     public static showAsForm(player: Player) {
         form.main().open(player);
     }
