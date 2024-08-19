@@ -1,8 +1,8 @@
-import { Block, BlockPermutation, ContainerSlot, Entity, EntityComponentTypes, EquipmentSlot, GameMode, ItemComponentTypes, ItemStack, Player, system, world } from "@minecraft/server";
+import { Block, BlockPermutation, ContainerSlot, Entity, EntityComponentTypes, EntityDamageCause, EquipmentSlot, GameMode, ItemComponentTypes, ItemStack, Player, system, world } from "@minecraft/server";
 import { Material, MaterialTag } from "./lib/Material";
-import { TripleAxisRotationBuilder, Vector3Builder } from "./util/Vector";
+import { Vector3Builder } from "./util/Vector";
 import { RandomHandler } from "./util/Random";
-import { SimulatedPlayerArmorMaterial, SimulatedPlayerManager, SimulatedPlayerWeaponMaterial } from "./SimulatedPlayerManager";
+import { SimulatedPlayerAI, SimulatedPlayerArmorMaterial, SimulatedPlayerManager, SimulatedPlayerWeaponMaterial } from "./SimulatedPlayerManager";
 
 interface MineCutAllEventListeners {
     readonly onComplete: Set<() => void>;
@@ -435,7 +435,7 @@ system.afterEvents.scriptEventReceive.subscribe(event => {
             SimulatedPlayerManager.requestSpawnPlayer({
                 name: event.message,
                 onCreate(player) {
-                    player.ai = true;
+                    player.ai = SimulatedPlayerAI.COMBAT;
                     player.weapon = SimulatedPlayerWeaponMaterial.WOODEN;
                     player.armor = SimulatedPlayerArmorMaterial.LEATHER;
                 }
@@ -448,7 +448,7 @@ system.afterEvents.scriptEventReceive.subscribe(event => {
                 SimulatedPlayerManager.requestSpawnPlayer({
                     name: RandomHandler.uuid(),
                     onCreate(player, time) {
-                        player.ai = true;
+                        player.ai = SimulatedPlayerAI.COMBAT;
                         player.weapon = SimulatedPlayerWeaponMaterial.DIAMOND;
                         player.armor = SimulatedPlayerArmorMaterial.DIAMOND;
                         console.warn(time);
@@ -461,3 +461,17 @@ system.afterEvents.scriptEventReceive.subscribe(event => {
 });
 
 SimulatedPlayerManager.commonConfig.followRange = 40;
+
+SimulatedPlayerManager.requestSpawnPlayer({
+    name: "Steve",
+    spawnPoint: { x: 0, y: 0, z: 0 },
+    gameMode: GameMode.survival,
+    onCreate(manager, time) {
+        console.warn(time);
+        manager.ai = SimulatedPlayerAI.COMBAT;
+        manager.projectile = new ItemStack(Material.SNOWBALL.getAsItemType());
+        manager.canUseEnderPearl = true;
+    }
+});
+
+SimulatedPlayerManager.commonConfig.blockMaterial = Material.DIAMOND_BLOCK;

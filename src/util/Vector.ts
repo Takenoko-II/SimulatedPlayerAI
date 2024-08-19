@@ -1,5 +1,4 @@
 import { Vector2, Vector3 } from "@minecraft/server";
-import { RandomHandler } from "./Random";
 
 function isValidNumber(x: unknown): x is number {
     return typeof x === "number" && !Number.isNaN(x);
@@ -391,7 +390,31 @@ export class Vector3Builder implements Vector3 {
     }
 
     public static zero(): Vector3Builder {
-        return new Vector3Builder(0, 0, 0);
+        return new this(0, 0, 0);
+    }
+
+    public static forward(): Vector3Builder {
+        return new this(0, 0, 1);
+    }
+
+    public static back(): Vector3Builder {
+        return new this(0, 0, -1);
+    }
+
+    public static left(): Vector3Builder {
+        return new this(1, 0, 0);
+    }
+
+    public static right(): Vector3Builder {
+        return new this(-1, 0, 0);
+    }
+
+    public static up(): Vector3Builder {
+        return new this(0, 1, 0);
+    }
+
+    public static down(): Vector3Builder {
+        return new this(0, -1, 0);
     }
 
     public static filled(value: number): Vector3Builder {
@@ -399,15 +422,15 @@ export class Vector3Builder implements Vector3 {
     }
 
     public static from(vector3: Vector3): Vector3Builder {
-        return new Vector3Builder(vector3.x, vector3.y, vector3.z);
+        return new this(vector3.x, vector3.y, vector3.z);
     }
 
     public static min(a: Vector3, b: Vector3): Vector3Builder {
-        return Vector3Builder.from(a).clone().operate(b, (a, b) => Math.min(a, b));
+        return this.from(a).clone().operate(b, (a, b) => Math.min(a, b));
     }
 
     public static max(a: Vector3, b: Vector3): Vector3Builder {
-        return Vector3Builder.from(a).clone().operate(b, (a, b) => Math.max(a, b));
+        return this.from(a).clone().operate(b, (a, b) => Math.max(a, b));
     }
 }
 
@@ -635,15 +658,15 @@ export class TripleAxisRotationBuilder implements Vector2 {
     }
 
     public static zero(): TripleAxisRotationBuilder {
-        return new TripleAxisRotationBuilder(0, 0, 0);
+        return new this(0, 0, 0);
     }
 
     public static filled(value: number): TripleAxisRotationBuilder {
-        return new TripleAxisRotationBuilder(value, value, value);
+        return new this(value, value, value);
     }
 
     public static from(vector2: Vector2): TripleAxisRotationBuilder {
-        return new TripleAxisRotationBuilder(vector2.y, vector2.x, 0);
+        return new this(vector2.y, vector2.x, 0);
     }
 }
 

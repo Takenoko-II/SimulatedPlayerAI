@@ -1,4 +1,4 @@
-import { Block, EntityComponentTypes, EntityDamageSource, EntityQueryOptions, EquipmentSlot, GameMode, ItemStack, LocationOutOfWorldBoundariesError, Player, System, system, UnloadedChunksError, Vector3, world } from "@minecraft/server";
+import { Block, Entity, EntityComponentTypes, EntityDamageCause, EntityDamageSource, EntityQueryOptions, EquipmentSlot, GameMode, ItemStack, LocationOutOfWorldBoundariesError, Player, System, system, UnloadedChunksError, Vector3, world } from "@minecraft/server";
 
 import { register, SimulatedPlayer } from "@minecraft/server-gametest";
 
@@ -7,6 +7,7 @@ import { MinecraftDimensionTypes } from "./lib/@minecraft/vanilla-data/lib/index
 import { ActionFormWrapper, MessageFormWrapper, ModalFormWrapper } from "./lib/UI";
 import { Vector3Builder } from "./util/Vector";
 import { Material } from "./lib/Material";
+import { RandomHandler } from "./util/Random";
 
 export interface SimulatedPlayerSpawnRequest {
     readonly name: string;
@@ -79,6 +80,18 @@ interface SimulatedPlayerHurtEvent extends SimulatedPlayerEvent {
     readonly damageSource: EntityDamageSource;
 }
 
+interface SimulatedPlayerPlaceBlockEvent extends SimulatedPlayerEvent {
+    readonly block: Block;
+}
+
+interface SimulatedPlayerAttackEntityEvent extends SimulatedPlayerEvent {
+    readonly target: Entity;
+
+    readonly damage: number;
+
+    readonly cause: EntityDamageCause;
+}
+
 type SimulatedPlayerEventTypes = {
     readonly onHealthChange: SimulatedPlayerHealthChangeEvent;
 
@@ -87,12 +100,18 @@ type SimulatedPlayerEventTypes = {
     readonly onSpawn: SimulatedPlayerSpawnEvent;
 
     readonly onHurt: SimulatedPlayerHurtEvent;
+
+    readonly onPlaceBlock: SimulatedPlayerPlaceBlockEvent;
+
+    readonly onAttack: SimulatedPlayerAttackEntityEvent;
 }
 
 interface SimulatedPlayerCommonConfig {
     blockLifespanSeconds: number;
 
     followRange: number;
+
+    blockMaterial: Material;
 }
 
 export enum SimulatedPlayerArmorMaterial {
@@ -115,6 +134,11 @@ export enum SimulatedPlayerWeaponMaterial {
     NETHERITE = "netherite"
 }
 
+export enum SimulatedPlayerAI {
+    NONE = "none",
+    COMBAT = "combat"
+}
+
 export class SimulatedPlayerManager {
     private readonly player: SimulatedPlayer;
 
@@ -122,14 +146,18 @@ export class SimulatedPlayerManager {
 
     private __weapon__: SimulatedPlayerWeaponMaterial = SimulatedPlayerWeaponMaterial.NONE;
 
-    private __ai__: boolean = false;
+    private __projectile__: ItemStack = new ItemStack(Material.SNOWBALL.getAsItemType());
 
-    public get ai(): boolean {
+    private __canUseEnderPearl__: boolean = true;
+
+    private __ai__: SimulatedPlayerAI = SimulatedPlayerAI.NONE;
+
+    public get ai(): SimulatedPlayerAI {
         return this.__ai__;
     }
 
-    public set ai(flag) {
-        this.__ai__ = flag;
+    public set ai(value) {
+        this.__ai__ = value;
     }
 
     private constructor(player: SimulatedPlayer) {
@@ -182,6 +210,22 @@ export class SimulatedPlayerManager {
             this.getAsServerPlayer().getComponent(EntityComponentTypes.Inventory).container.setItem(0, new ItemStack(this.__weapon__ + "_sword"));
             this.getAsServerPlayer().selectedSlotIndex = 0;
         }
+    }
+
+    public get projectile(): ItemStack {
+        return this.__projectile__;
+    }
+
+    public set projectile(value) {
+        this.__projectile__ = value;
+    }
+
+    public get canUseEnderPearl(): boolean {
+        return this.__canUseEnderPearl__;
+    }
+
+    public set canUseEnderPearl(value) {
+        this.__canUseEnderPearl__ = value;
     }
 
     public isValid(): boolean {
@@ -239,35 +283,48 @@ export class SimulatedPlayerManager {
     }
 
     public static readonly events: SimulatedPlayerEventHandlerRegistrar = {
-        on: (event, listener) => {
+        on(event, listener) {
             return SimulatedPlayerEventHandlerRegistry.get(event).add(listener);
         },
-        off: (id) => {
+
+        off(id) {
             SimulatedPlayerEventHandlerRegistry.remove(id);
         }
     };
 
     public static readonly commonConfig: SimulatedPlayerCommonConfig = {
         get blockLifespanSeconds(): number {
-            return internalConfig.blockLifespanSeconds;
+            return internalCommonConfig.blockLifespanSeconds;
         },
 
         set blockLifespanSeconds(value) {
             if (typeof value === "number" && !Number.isNaN(value) && Number.isInteger(value)) {
-                internalConfig.blockLifespanSeconds = value;
+                internalCommonConfig.blockLifespanSeconds = value;
             }
             else throw new TypeError();
         },
 
         get followRange(): number {
-            return internalConfig.followRange;
+            return internalCommonConfig.followRange;
         },
 
         set followRange(value) {
             if (typeof value === "number" && !Number.isNaN(value) && Number.isInteger(value)) {
-                internalConfig.followRange = value;
+                internalCommonConfig.followRange = value;
             }
             else throw new TypeError();
+        },
+
+        get blockMaterial(): Material {
+            return internalCommonConfig.blockMaterial;
+        },
+
+        set blockMaterial(value) {
+            if (!value.isBlock) {
+                throw new TypeError();
+            }
+
+            internalCommonConfig.blockMaterial = value;
         }
     };
 
@@ -276,9 +333,10 @@ export class SimulatedPlayerManager {
     }
 }
 
-const internalConfig: SimulatedPlayerCommonConfig = {
+const internalCommonConfig: SimulatedPlayerCommonConfig = {
     blockLifespanSeconds: 3,
-    followRange: 20
+    followRange: 20,
+    blockMaterial: Material.COBBLESTONE
 }
 
 const form = {
@@ -308,7 +366,7 @@ const form = {
             SimulatedPlayerManager.requestSpawnPlayer({
                 name: event.getTextField("name"),
                 onCreate(player, time) {
-                    player.ai = true;
+                    player.ai = SimulatedPlayerAI.COMBAT;
                     console.warn(player.getAsServerPlayer().name + " joined. (" + time + "ms)");
                 }
             });
@@ -351,12 +409,12 @@ const form = {
         .dropdown("armor", "防具", armors, armors.indexOf(manager.armor))
         .dropdown("weapon", "近接武器", weapons, weapons.indexOf(manager.weapon))
         .dropdown("offHand", "オフハンド", ["none", "shield", "totem_of_undying"])
-        .toggle("ai", "AI", manager.ai)
+        .dropdown("ai", "AI", Object.values(SimulatedPlayerAI).map(e => e.toLowerCase()), Object.values(SimulatedPlayerAI).indexOf(manager.ai))
         .onSubmit(event => {
             const offHand = event.getDropdown("offHand");
             const equippable = manager.getAsServerPlayer().getComponent(EntityComponentTypes.Equippable);
 
-            manager.ai = event.getToggle("ai");
+            manager.ai = SimulatedPlayerAI[event.getDropdown("ai").toUpperCase()];
             manager.armor = event.getDropdown("armor") as SimulatedPlayerArmorMaterial;
             manager.weapon = event.getDropdown("weapon") as SimulatedPlayerWeaponMaterial;
 
@@ -420,6 +478,10 @@ class SimulatedPlayerEventHandlerRegistry<T extends keyof SimulatedPlayerEventTy
     public static readonly onSpawn = new this("onSpawn");
 
     public static readonly onHurt = new this("onHurt");
+
+    public static readonly onPlaceBlock = new this("onPlaceBlock");
+
+    public static readonly onAttack = new this("onAttack");
 }
 
 world.afterEvents.entityHealthChanged.subscribe(event => {
@@ -497,8 +559,28 @@ world.afterEvents.entityHurt.subscribe(event => {
     });
 });
 
+world.afterEvents.entityHurt.subscribe(event => {
+    const damager = event.damageSource.damagingEntity;
+
+    if (damager === undefined) return;
+
+    const manager = SimulatedPlayerManager.getById(damager.id);
+
+    if (manager === undefined) return;
+
+    SimulatedPlayerEventHandlerRegistry.get("onAttack").call({
+        "simulatedPlayerManager": manager,
+        "target": event.hurtEntity,
+        "damage": event.damage,
+        "cause": event.damageSource.cause
+    });
+});
+
+
 const handledMap: Map<SimulatedPlayerManager, boolean> = new Map();
 const simulatedPlayerFallingTicks: Map<SimulatedPlayerManager, number> = new Map();
+
+const leftOrRight: Map<SimulatedPlayerManager, "L" | "R"> = new Map();
 
 const excludeTypes = [
     "fishing_hook",
@@ -543,6 +625,24 @@ const excludeTypes = [
 
 system.runInterval(() => {
     for (const playerManager of SimulatedPlayerManager.getManagers()) {
+        function placeBlockAndJump() {
+            const block = playerManager.getAsServerPlayer().dimension.getBlock(location);
+            player.jump();
+            system.runTimeout(() => {
+                if (!player.isValid()) return;
+
+                player.stopMoving();
+                player.isSprinting = false;
+                putTemporaryBlock(playerManager, block);
+            }, 6);
+        }
+
+        function placeBlockAsPath() {
+            const block = playerManager.getAsServerPlayer().dimension.getBlock(location).below();
+            if (!block.isSolid && !block.below().isSolid && player.isOnGround) {
+                putTemporaryBlock(playerManager, block);
+            }
+        }
 
         if (playerManager.getAsGameTestPlayer().isFalling) {
             const ticks = simulatedPlayerFallingTicks.get(playerManager);
@@ -569,7 +669,7 @@ system.runInterval(() => {
 
         const player = playerManager.getAsGameTestPlayer();
 
-        const entities = player.dimension.getEntities({ location: location, maxDistance: internalConfig.followRange, excludeTypes })
+        const entities = player.dimension.getEntities({ location: location, maxDistance: internalCommonConfig.followRange, excludeTypes })
         .filter(entity => {
             if (entity.id === player.id) return false;
 
@@ -594,32 +694,39 @@ system.runInterval(() => {
             }, 10);
         }
 
-        if (entities.length > 0 && distance < 6.5) {
-            if ((simulatedPlayerFallingTicks.get(playerManager) ?? 0) > 1) {
-                player.attackEntity(target);
+        if (entities.length > 0 && distance < 5) {
+            if ((simulatedPlayerFallingTicks.get(playerManager) ?? 0) > 1 && player.getEntitiesFromViewDirection({ maxDistance: 5 }) !== undefined) {
+                const r = player.attackEntity(target);
+                if (r) {
+                    leftOrRight.set(playerManager, RandomHandler.chance() ? "L" : "R");
+                }
             }
         }
 
         const dir = Vector3Builder.from(player.getViewDirection());
         dir.y = 0;
-        dir.scale(0.5);
+        dir.scale(0.75);
 
         const forward = Vector3Builder.from(player.location)
-        .add({ x: 0, y: 1, z: 0 })
         .add(dir);
 
         const dim = playerManager.getAsServerPlayer().dimension;
 
         const blocks = [
             dim.getBlock(forward),
-            dim.getBlock(forward.clone().add(dir.getRotation2d().getLocalAxisProvider().getX().scale(0.5))),
-            dim.getBlock(forward.clone().add(dir.getRotation2d().getLocalAxisProvider().getX().scale(-0.5)))
+            dim.getBlock(forward.clone().add(dir.getRotation2d().getLocalAxisProvider().getX().scale(0.75))),
+            dim.getBlock(forward.clone().add(dir.getRotation2d().getLocalAxisProvider().getX().scale(-0.75)))
         ]
         .filter(b => b !== undefined);
 
-        if (blocks.some(block => block.isSolid) && (player.getVelocity().x === 0 || player.getVelocity().z === 0)) {
-            player.jump();
-            player.applyKnockback(player.getViewDirection().x, player.getViewDirection().z, 0.6, player.getVelocity().y);
+        if (system.currentTick % 3 === 0 && blocks.some(block => block.isSolid) && (player.getVelocity().x === 0 || player.getVelocity().z === 0)) {
+            if (blocks.every(block => block.above().isSolid === false)) {
+                player.jump();
+                player.applyKnockback(player.getViewDirection().x, player.getViewDirection().z, 0.5, player.getVelocity().y);
+            }
+            else {
+                placeBlockAndJump();
+            }
         }
 
         if (entities.length > 0 && distance < 4) {
@@ -630,6 +737,10 @@ system.runInterval(() => {
             const direction = forward
             .getLocalAxisProvider()
             .getX();
+
+            if (leftOrRight.get(playerManager) === "R") {
+                direction.invert();
+            }
 
             player.setRotation(forward);
 
@@ -642,30 +753,11 @@ system.runInterval(() => {
         }
         else if (entities.length > 0) {
             // near
-            function placeBlockAndJump() {
-                const block = playerManager.getAsServerPlayer().dimension.getBlock(location);
-                player.jump();
-                system.runTimeout(() => {
-                    if (!player.isValid()) return;
-
-                    player.stopMoving();
-                    player.isSprinting = false;
-                    putTemporaryBlock(player, block);
-                }, 6);
-            }
-
-            function placeBlockAsPath() {
-                const block = playerManager.getAsServerPlayer().dimension.getBlock(location).below();
-                if (!block.isSolid && !block.below().isSolid && player.isOnGround) {
-                    putTemporaryBlock(player, block);
-                }
-            }
-
             if (target.location.y - location.y > 2) {
                 player.stopMoving();
                 if (system.currentTick % 10 === 0) {
                     player.setRotation(Vector3Builder.from({ x: 0, y: -1, z: 0 }).getRotation2d());
-                    player.setItem(new ItemStack("cobblestone"), 3, true);
+                    player.setItem(new ItemStack(internalCommonConfig.blockMaterial.getAsItemType()), 3, true);
                     placeBlockAndJump();
                 }
             }
@@ -678,13 +770,15 @@ system.runInterval(() => {
                 player.setRotation(v.getRotation2d());
                 player.moveRelative(0, 1);
 
-                if (distance > 5 && distance < 9) {
-                    player.setItem(new ItemStack("snowball"), 2, true);
-                    player.useItemInSlot(2);
-                }
-                else if (distance > 14 && distance < 16) {
-                    player.setItem(new ItemStack("ender_pearl"), 3, true);
-                    player.useItemInSlot(3);
+                if (system.currentTick % 20 === 0) {
+                    if (distance > 5 && distance < 9) {
+                        player.setItem(playerManager.projectile.clone(), 2, true);
+                        player.useItemInSlot(2);
+                    }
+                    else if (distance > 14 && distance < 16 && playerManager.canUseEnderPearl) {
+                        player.setItem(new ItemStack(Material.ENDER_PEARL.getAsItemType()), 3, true);
+                        player.useItemInSlot(3);
+                    }
                 }
 
                 if (system.currentTick % 20 === 0) {
@@ -706,7 +800,7 @@ system.runInterval(() => {
     for (const info of temporaryBlocks) {
         try {
             const block = world.getDimension(info.dimensionId).getBlock(info.location);
-            if (block.permutation.type.id === Material.COBBLESTONE.getAsBlockType().id) {
+            if (block.permutation.type.id === internalCommonConfig.blockMaterial.getAsBlockType().id) {
                 if (info.seconds > 0) {
                     info.seconds--;
                 }
@@ -747,14 +841,23 @@ interface TemporaryBlock {
     seconds: number;
 }
 
-function putTemporaryBlock(player: SimulatedPlayer, block: Block) {
-    player.attack();
-    block.setType(Material.COBBLESTONE.getAsBlockType());
+function putTemporaryBlock(manager: SimulatedPlayerManager, block: Block) {
+    manager.getAsGameTestPlayer().attack();
+
+    block.setType(internalCommonConfig.blockMaterial.getAsBlockType());
+
     const temporaryBlocks: TemporaryBlock[] = JSON.parse((world.getDynamicProperty("simulated_player:temporary_blocks") ?? "[]") as string);
+
     temporaryBlocks.push({
         dimensionId: block.dimension.id,
         location: block.location,
-        seconds: internalConfig.blockLifespanSeconds
+        seconds: internalCommonConfig.blockLifespanSeconds
     });
+
     world.setDynamicProperty("simulated_player:temporary_blocks", JSON.stringify(temporaryBlocks));
+
+    SimulatedPlayerEventHandlerRegistry.get("onPlaceBlock").call({
+        "simulatedPlayerManager": manager,
+        "block": block
+    });
 }
