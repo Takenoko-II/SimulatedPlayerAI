@@ -3,7 +3,7 @@
     "header": {
         "description": "",
         "name": "SimulatedPlayerAI",
-        "uuid": "523a5c6b-a541-45c8-834b-19e3b89234bc",
+        "uuid": "a3804140-6d87-4efa-b0f8-5e8584755fb1",
         "version": [0, 0, 0],
         "min_engine_version": [1, 21, 20]
     },
@@ -11,14 +11,14 @@
         {
             "description": "",
             "type": "data",
-            "uuid": "af686354-c752-4f1c-ac4f-d7d99b42507e",
+            "uuid": "b429bbf5-4d5a-47a7-98c5-633448f3e427",
             "version": [0, 0, 0]
         },
         {
             "description": "",
             "type": "script",
             "language": "JavaScript",
-            "uuid": "78a16cfd-b854-42d4-b0b4-022702d5178a",
+            "uuid": "4fb52943-5046-42d6-a459-4fe56f91c6b7",
             "version": [0, 0, 0],
             "entry": "scripts/dest/main.js"
         }

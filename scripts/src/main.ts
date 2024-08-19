@@ -13,13 +13,13 @@ SimulatedPlayerManager.events.on("onDie", event => {
 system.afterEvents.scriptEventReceive.subscribe(event => {
     const [namespace, id] = event.id.split(":");
 
-    if (!(namespace === "simulated_player" && event.sourceEntity instanceof Player)) return;
-
-    const player = event.sourceEntity;
+    if (namespace !== "simulated_player") return;
 
     switch (id) {
         case "manager": {
-            SimulatedPlayerManager.showAsForm(player);
+            if (event.sourceEntity instanceof Player) {
+                SimulatedPlayerManager.showAsForm(event.sourceEntity);
+            }
             break;
         }
         case "spawn": {
@@ -30,6 +30,12 @@ system.afterEvents.scriptEventReceive.subscribe(event => {
                     player.weapon = SimulatedPlayerWeaponMaterial.WOODEN;
                     player.armor = SimulatedPlayerArmorMaterial.LEATHER;
                 }
+            });
+            break;
+        }
+        case "delete_all": {
+            SimulatedPlayerManager.getManagers().forEach(manager => {
+                manager.getAsGameTestPlayer().disconnect();
             });
             break;
         }
@@ -52,4 +58,4 @@ system.afterEvents.scriptEventReceive.subscribe(event => {
 });
 
 SimulatedPlayerManager.commonConfig.followRange = 40;
-SimulatedPlayerManager.commonConfig.blockMaterial = Material.DIAMOND_BLOCK;
+SimulatedPlayerManager.commonConfig.blockMaterial = Material.COBBLESTONE;

@@ -389,7 +389,6 @@ export class SimulatedPlayerManager {
             else throw new TypeError();
         },
 
-        
         get followRange(): number {
             return internalCommonConfig.followRange;
         },
@@ -445,6 +444,9 @@ const form = {
             form.list(manager => {
                 form.delete(manager).open(player);
             }).open(player);
+        })
+        .button("§4全プレイヤーを削除", "textures/ui/realms_red_x", player => {
+            form.deleteAll().open(player);
         });
     },
 
@@ -468,9 +470,24 @@ const form = {
         .title("Delete Simulated Player")
         .body(manager.getAsGameTestPlayer().name + "を削除しますか？")
         .button1("y")
-        .button2("n")
+        .button2("n", player => {
+            form.main().open(player);
+        })
         .onPush(b => b.name === "y", event => {
             manager.getAsGameTestPlayer().disconnect();
+        });
+    },
+
+    deleteAll(): MessageFormWrapper {
+        return new MessageFormWrapper()
+        .title("Delete All Simulated Player")
+        .body("全プレイヤーを削除しますか？")
+        .button1("y")
+        .button2("n", player => {
+            form.main().open(player);
+        })
+        .onPush(b => b.name === "y", event => {
+            SimulatedPlayerManager.getManagers().forEach(manager => manager.getAsGameTestPlayer().disconnect());
         });
     },
 
@@ -580,7 +597,11 @@ world.afterEvents.entityHealthChanged.subscribe(event => {
     if (manager === undefined) return;
     if (!manager.isValid()) return;
 
-    const value = event.newValue < 0 ? 0 : Math.floor(event.newValue * 10) / 10;
+    const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(value, max));
+
+    const maxHealth = manager.getAsServerPlayer().getComponent(EntityComponentTypes.Health).effectiveMax;
+
+    const value = Math.floor(clamp(event.newValue, 0, maxHealth) * 10) / 10;
 
     manager.getAsGameTestPlayer().nameTag = `${manager.getAsGameTestPlayer().name}\n§r§cHealth: §f${value}`;
 
@@ -759,6 +780,8 @@ system.runInterval(() => {
 
         const player = playerManager.getAsGameTestPlayer();
 
+        const serverPlayer = playerManager.getAsServerPlayer();
+
         const entities = player.dimension.getEntities({ location: location, maxDistance: internalCommonConfig.followRange, excludeTypes })
         .filter(entity => {
             if (entity.id === player.id) return false;
@@ -785,7 +808,12 @@ system.runInterval(() => {
         }
 
         if (entities.length > 0 && distance < 5) {
-            if ((simulatedPlayerFallingTicks.get(playerManager) ?? 0) > 1 && player.getEntitiesFromViewDirection({ maxDistance: 5 }) !== undefined) {
+            const direction = Vector3Builder.from(location).getDirectionTo(target.location);
+            const dist = Vector3Builder.from(location).getDistanceTo(target.location);
+            const rayCastResultFeet = serverPlayer.dimension.getBlockFromRay(location, direction, { maxDistance: dist + 1 });
+            const rayCastResultEyes = serverPlayer.dimension.getBlockFromRay(serverPlayer.getHeadLocation(), direction, { maxDistance: dist + 1 });
+
+            if ((simulatedPlayerFallingTicks.get(playerManager) ?? 0) > 1 && (rayCastResultEyes === undefined || rayCastResultFeet === undefined)) {
                 const r = player.attackEntity(target);
                 if (r) {
                     leftOrRight.set(playerManager, RandomHandler.chance() ? "L" : "R");
@@ -809,7 +837,7 @@ system.runInterval(() => {
         ]
         .filter(b => b !== undefined);
 
-        if (system.currentTick % 3 === 0 && blocks.some(block => block.isSolid) && (player.getVelocity().x === 0 || player.getVelocity().z === 0)) {
+        if (entities.length > 0 && system.currentTick % 3 === 0 && blocks.some(block => block.isSolid) && (player.getVelocity().x === 0 || player.getVelocity().z === 0)) {
             if (blocks.every(block => block.above().isSolid === false)) {
                 player.jump();
                 player.applyKnockback(player.getViewDirection().x, player.getViewDirection().z, 0.5, player.getVelocity().y);
@@ -853,6 +881,7 @@ system.runInterval(() => {
             }
             else {
                 if (Math.abs(target.location.y - location.y) <= 2) {
+                    player.setItem(new ItemStack(internalCommonConfig.blockMaterial.getAsItemType()), 3, true);
                     placeBlockAsPath();
                 }
 
