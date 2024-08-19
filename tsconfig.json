@@ -1,5 +1,5 @@
 {
-    "include": ["src/"],
+    "include": ["scripts/src/"],
     "exclude": [],
     "compilerOptions": {
       "allowJs": true,
@@ -9,7 +9,7 @@
       "moduleResolution": "node",
       "esModuleInterop": true,
       "strictNullChecks": false,
-      "rootDir": "src",
-      "outDir": "dest"
+      "rootDir": "scripts/src",
+      "outDir": "scripts/dest"
     }
 }

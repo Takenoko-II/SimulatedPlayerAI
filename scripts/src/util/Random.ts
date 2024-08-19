@@ -34,17 +34,14 @@ export class RandomHandler {
         return clone;
     }
 
-    public static choice<T>(value: T): T[keyof T] {
-        const keys = Object.keys(value);
-        const index = this.generate({ min: 0, max: keys.length - 1 });
+    public static choice<T>(value: T[]): T {
+        const index = this.generate({ min: 0, max: value.length - 1 });
 
-        if (keys.length === 0) {
+        if (value.length === 0) {
             throw new RangeError("キーの数は1以上である必要があります");
         }
 
-        const key = keys[index];
-
-        return value[key];
+        return value[index];
     }
 
     public static chance(chance = 0.5) {

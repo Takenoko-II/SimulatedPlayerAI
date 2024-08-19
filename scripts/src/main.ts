@@ -1,0 +1,55 @@
+import { Player, system } from "@minecraft/server";
+import { Material } from "./lib/Material";
+import { RandomHandler } from "./util/Random";
+import { SimulatedPlayerAI, SimulatedPlayerArmorMaterial, SimulatedPlayerManager, SimulatedPlayerWeaponMaterial } from "./SimulatedPlayerManager";
+
+SimulatedPlayerManager.events.on("onDie", event => {
+    system.runTimeout(() => {
+        if (!event.simulatedPlayerManager.isValid()) return;
+        event.simulatedPlayerManager.getAsGameTestPlayer().respawn();
+    }, 40);
+});
+
+system.afterEvents.scriptEventReceive.subscribe(event => {
+    const [namespace, id] = event.id.split(":");
+
+    if (!(namespace === "simulated_player" && event.sourceEntity instanceof Player)) return;
+
+    const player = event.sourceEntity;
+
+    switch (id) {
+        case "manager": {
+            SimulatedPlayerManager.showAsForm(player);
+            break;
+        }
+        case "spawn": {
+            SimulatedPlayerManager.requestSpawnPlayer({
+                name: event.message,
+                onCreate(player) {
+                    player.ai = SimulatedPlayerAI.COMBAT;
+                    player.weapon = SimulatedPlayerWeaponMaterial.WOODEN;
+                    player.armor = SimulatedPlayerArmorMaterial.LEATHER;
+                }
+            });
+            break;
+        }
+        case "chaos": {
+            SimulatedPlayerManager.getManagers().forEach(manager => manager.getAsGameTestPlayer().disconnect());
+            for (let i = 0; i < 8; i++) {
+                SimulatedPlayerManager.requestSpawnPlayer({
+                    name: RandomHandler.uuid(),
+                    onCreate(player, time) {
+                        player.ai = SimulatedPlayerAI.COMBAT;
+                        player.weapon = SimulatedPlayerWeaponMaterial.DIAMOND;
+                        player.armor = SimulatedPlayerArmorMaterial.DIAMOND;
+                        console.warn(time);
+                    }
+                });
+            }
+            break;
+        }
+    }
+});
+
+SimulatedPlayerManager.commonConfig.followRange = 40;
+SimulatedPlayerManager.commonConfig.blockMaterial = Material.DIAMOND_BLOCK;
