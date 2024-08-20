@@ -6,7 +6,7 @@ import { MinecraftDimensionTypes } from "./lib/@minecraft/vanilla-data/lib/index
 
 import { ActionFormWrapper, MessageFormWrapper, ModalFormWrapper } from "./lib/UI";
 import { Vector3Builder } from "./util/Vector";
-import { Material } from "./lib/Material";
+import { Material, MaterialTag } from "./lib/Material";
 import { RandomHandler } from "./util/Random";
 
 /**
@@ -173,6 +173,12 @@ export enum SimulatedPlayerWeaponMaterial {
     NETHERITE = "netherite"
 }
 
+export enum SimulatedPlayerAuxiliary {
+    NONE = "none",
+    SHIELD = "shield",
+    TOTEM = "totem_of_undying"
+}
+
 export enum SimulatedPlayerAI {
     NONE = "none",
     COMBAT = "combat"
@@ -187,6 +193,8 @@ export class SimulatedPlayerManager {
     private __armor__: SimulatedPlayerArmorMaterial = SimulatedPlayerArmorMaterial.NONE;
 
     private __weapon__: SimulatedPlayerWeaponMaterial = SimulatedPlayerWeaponMaterial.NONE;
+
+    private __auxiliary__: SimulatedPlayerAuxiliary = SimulatedPlayerAuxiliary.NONE;
 
     private __projectile__: ItemStack = new ItemStack(Material.SNOWBALL.getAsItemType());
 
@@ -270,6 +278,26 @@ export class SimulatedPlayerManager {
     }
 
     /**
+     * オフハンドのアイテム
+     */
+    public get auxiliary(): SimulatedPlayerAuxiliary {
+        return this.__auxiliary__;
+    }
+
+    public set auxiliary(value) {
+        this.__auxiliary__ = value;
+
+        const offHandEquipment = this.getAsServerPlayer().getComponent(EntityComponentTypes.Equippable).getEquipmentSlot(EquipmentSlot.Offhand);
+
+        if (this.__auxiliary__ === "none") {
+            offHandEquipment.setItem();
+        }
+        else {
+            offHandEquipment.setItem(new ItemStack(this.__auxiliary__));
+        }
+    }
+
+    /**
      * プレイヤーが使う中距離武器
      */
     public get projectile(): ItemStack {
@@ -298,11 +326,38 @@ export class SimulatedPlayerManager {
         return this.player.isValid() && this.getAsServerPlayer().isValid();
     }
 
+    public equip(): void {
+        this.armor = this.armor;
+        this.weapon = this.weapon;
+        this.auxiliary = this.auxiliary;
+    }
+
+    private __reloading__: boolean = false;
+
+    /**
+     * もやんがちゃんとしてくれればこんなのいらないのにね！！！！！！！！！！！！
+     */
+    public async reload(): Promise<void> {
+        if (this.__reloading__) throw new Error("still reloading");
+
+        const location = this.getAsServerPlayer().location;
+        this.getAsServerPlayer().teleport({ x: 100000, y: 0, z: 0 });
+        this.__reloading__ = true;
+        return new Promise(resolve => {
+            system.runTimeout(() => {
+                if (!this.isValid()) return;
+                this.getAsServerPlayer().teleport(location);
+                this.__reloading__ = false;
+                resolve();
+            }, 1);
+        });
+    }
+
     /**
      * プレイヤーをワールドに召喚するよう要求する関数
      */
     public static requestSpawnPlayer(request: SimulatedPlayerSpawnRequest): void {
-        this.requestInternal({
+        this.waitToBeAddedToQueue({
             time: Date.now(),
             newManager(player) {
                 return new SimulatedPlayerManager(player);
@@ -311,7 +366,7 @@ export class SimulatedPlayerManager {
         });
     }
 
-    private static requestInternal(request: SimulatedPlayerSpawnRequestInternalInfo) {
+    private static waitToBeAddedToQueue(request: SimulatedPlayerSpawnRequestInternalInfo) {
         if (ok) {
             nextSpawnRequestQueue.push(request);
             ok = false;
@@ -319,7 +374,7 @@ export class SimulatedPlayerManager {
         }
         else {
             system.run(() => {
-                this.requestInternal(request);
+                this.waitToBeAddedToQueue(request);
             });
         }
     }
@@ -424,7 +479,7 @@ export class SimulatedPlayerManager {
 
 const internalCommonConfig: SimulatedPlayerCommonConfig = {
     blockLifespanSeconds: 3,
-    followRange: 20,
+    followRange: 30,
     blockMaterial: Material.COBBLESTONE
 }
 
@@ -438,6 +493,12 @@ const form = {
         .button("§9コンフィグ", "textures/ui/settings_glyph_color_2x", player => {
             form.list(manager => {
                 form.config(manager).open(player);
+            }).open(player);
+        })
+        .button("§3再読み込み", "textures/items/ender_pearl", player => {
+            form.list(manager => {
+                form.reload(manager);
+                form.main().open(player);
             }).open(player);
         })
         .button("§c削除", "textures/ui/trash_default", player => {
@@ -509,28 +570,27 @@ const form = {
     },
 
     config(manager: SimulatedPlayerManager): ModalFormWrapper {
-        const armors = ["none", "leather", "golden", "chainmail", "iron", "diamond", "netherite"];
-        const weapons = ["none", "wooden", "stone", "iron", "diamond", "netherite"];
+        const armorMaterials = Object.values(SimulatedPlayerArmorMaterial);
+        const weaponMaterials = Object.values(SimulatedPlayerWeaponMaterial);
+        const auxiliaries = Object.values(SimulatedPlayerAuxiliary);
+        const aiTypes = Object.values(SimulatedPlayerAI);
         return new ModalFormWrapper()
         .title("Simulated Player Config")
-        .dropdown("armor", "防具", armors, armors.indexOf(manager.armor))
-        .dropdown("weapon", "近接武器", weapons, weapons.indexOf(manager.weapon))
-        .dropdown("offHand", "オフハンド", ["none", "shield", "totem_of_undying"])
-        .dropdown("ai", "AI", Object.values(SimulatedPlayerAI).map(e => e.toLowerCase()), Object.values(SimulatedPlayerAI).indexOf(manager.ai))
+        .dropdown("armor", "防具", armorMaterials, armorMaterials.indexOf(manager.armor))
+        .dropdown("weapon", "近接武器", weaponMaterials, weaponMaterials.indexOf(manager.weapon))
+        .dropdown("auxiliary", "オフハンド", auxiliaries, auxiliaries.indexOf(manager.auxiliary))
+        .dropdown("ai", "AI", aiTypes, aiTypes.indexOf(manager.ai))
         .onSubmit(event => {
-            const offHand = event.getDropdown("offHand");
-            const equippable = manager.getAsServerPlayer().getComponent(EntityComponentTypes.Equippable);
+            manager.ai = aiTypes.find(ai => ai === event.getDropdown("ai"));
+            manager.armor = armorMaterials.find(armor => armor === event.getDropdown("armor"));
+            manager.weapon = weaponMaterials.find(weapon => weapon === event.getDropdown("weapon"));
+            manager.auxiliary = auxiliaries.find(auxiliary => auxiliary === event.getDropdown("auxiliary"));
+        });
+    },
 
-            manager.ai = SimulatedPlayerAI[event.getDropdown("ai").toUpperCase()];
-            manager.armor = event.getDropdown("armor") as SimulatedPlayerArmorMaterial;
-            manager.weapon = event.getDropdown("weapon") as SimulatedPlayerWeaponMaterial;
-
-            if (offHand === "none") {
-                equippable.setEquipment(EquipmentSlot.Offhand);
-            }
-            else {
-                equippable.setEquipment(EquipmentSlot.Offhand, new ItemStack(offHand));
-            }
+    reload(manager: SimulatedPlayerManager) {
+        manager.reload().then(() => {
+            console.warn("reload: " + manager.getAsGameTestPlayer().name);
         });
     }
 };
@@ -734,27 +794,67 @@ const excludeTypes = [
     "wind_charge_projectile"
 ];
 
+function placeBlockAndJump(manager: SimulatedPlayerManager) {
+    const player = manager.getAsGameTestPlayer();
+    const location = manager.getAsServerPlayer().location;
+    const block = manager.getAsServerPlayer().dimension.getBlock(location);
+
+    player.jump();
+
+    system.runTimeout(() => {
+        if (!manager.isValid()) return;
+
+        player.stopMoving();
+        player.isSprinting = false;
+        putTemporaryBlock(manager, block);
+    }, 6);
+}
+
+function placeBlockAsPath(manager: SimulatedPlayerManager) {
+    const player = manager.getAsGameTestPlayer();
+    const location = manager.getAsServerPlayer().location;
+    const block = manager.getAsServerPlayer().dimension.getBlock(location).below();
+
+    if (!block.isSolid && !block.below().isSolid && player.isOnGround) {
+        putTemporaryBlock(manager, block);
+    }
+}
+
+function putTemporaryBlock(manager: SimulatedPlayerManager, block: Block) {
+    if (!block.isAir && !block.isLiquid) return;
+
+    manager.getAsGameTestPlayer().attack();
+
+    block.setType(internalCommonConfig.blockMaterial.getAsBlockType());
+
+    const temporaryBlocks: TemporaryBlock[] = JSON.parse((world.getDynamicProperty("simulated_player:temporary_blocks") ?? "[]") as string);
+
+    temporaryBlocks.push({
+        dimensionId: block.dimension.id,
+        location: block.location,
+        seconds: internalCommonConfig.blockLifespanSeconds
+    });
+
+    world.setDynamicProperty("simulated_player:temporary_blocks", JSON.stringify(temporaryBlocks));
+
+    SimulatedPlayerEventHandlerRegistry.get("onPlaceBlock").call({
+        "simulatedPlayerManager": manager,
+        "block": block
+    });
+}
+
+interface TemporaryBlock {
+    readonly location: Vector3;
+
+    readonly dimensionId: string;
+
+    seconds: number;
+}
+
+const baseStrength = 0.65;
+
 system.runInterval(() => {
     for (const playerManager of SimulatedPlayerManager.getManagers()) {
-        function placeBlockAndJump() {
-            const block = playerManager.getAsServerPlayer().dimension.getBlock(location);
-            player.jump();
-            system.runTimeout(() => {
-                if (!player.isValid()) return;
-
-                player.stopMoving();
-                player.isSprinting = false;
-                putTemporaryBlock(playerManager, block);
-            }, 6);
-        }
-
-        function placeBlockAsPath() {
-            const block = playerManager.getAsServerPlayer().dimension.getBlock(location).below();
-            if (!block.isSolid && !block.below().isSolid && player.isOnGround) {
-                putTemporaryBlock(playerManager, block);
-            }
-        }
-
         if (playerManager.getAsGameTestPlayer().isFalling) {
             const ticks = simulatedPlayerFallingTicks.get(playerManager);
             if (ticks === undefined) {
@@ -768,8 +868,8 @@ system.runInterval(() => {
             simulatedPlayerFallingTicks.set(playerManager, 0);
         }
 
-        if (!playerManager.ai) {
-            if (system.currentTick % 20 === 0) {
+        if (playerManager.ai === SimulatedPlayerAI.NONE) {
+            if (system.currentTick % 30 === 0) {
                 playerManager.getAsGameTestPlayer().stopMoving();
                 playerManager.getAsGameTestPlayer().isSprinting = false;
             }
@@ -814,9 +914,10 @@ system.runInterval(() => {
             const rayCastResultEyes = serverPlayer.dimension.getBlockFromRay(serverPlayer.getHeadLocation(), direction, { maxDistance: dist + 1 });
 
             if ((simulatedPlayerFallingTicks.get(playerManager) ?? 0) > 1 && (rayCastResultEyes === undefined || rayCastResultFeet === undefined)) {
+                serverPlayer.selectedSlotIndex = 0;
                 const r = player.attackEntity(target);
                 if (r) {
-                    leftOrRight.set(playerManager, RandomHandler.chance() ? "L" : "R");
+                    leftOrRight.set(playerManager, RandomHandler.choice(["L", "R"]));
                 }
             }
         }
@@ -837,14 +938,18 @@ system.runInterval(() => {
         ]
         .filter(b => b !== undefined);
 
-        if (entities.length > 0 && system.currentTick % 3 === 0 && blocks.some(block => block.isSolid) && (player.getVelocity().x === 0 || player.getVelocity().z === 0)) {
+        if (entities.length > 0 && system.currentTick % 5 === 0 && blocks.some(block => block.isSolid) && (player.getVelocity().x === 0 || player.getVelocity().z === 0)) {
             if (blocks.every(block => block.above().isSolid === false)) {
                 player.jump();
-                player.applyKnockback(player.getViewDirection().x, player.getViewDirection().z, 0.5, player.getVelocity().y);
+                player.moveRelative(0, 1, 1);
+                // player.applyKnockback(player.getViewDirection().x, player.getViewDirection().z, 0.5, player.getVelocity().y);
             }
             else {
-                placeBlockAndJump();
+                placeBlockAndJump(playerManager);
             }
+        }
+        else if (entities.length > 0 && system.currentTick % 5 === 0 && blocks.some(block => block.above().isSolid) && (player.getVelocity().x === 0 || player.getVelocity().z === 0)) {
+            placeBlockAndJump(playerManager);
         }
 
         if (entities.length > 0 && distance < 4) {
@@ -865,7 +970,12 @@ system.runInterval(() => {
             playerManager.getAsServerPlayer().selectedSlotIndex = 0;
 
             if (player.isOnGround) {
-                player.applyKnockback(direction.x, direction.z, 0.65, player.getVelocity().y);
+                // player.moveRelative(leftOrRight.get(playerManager) === "L" ? 1 : -1, 0, 1); kb使わないと移動遅すぎてだめ 他の値わざわざいじるのもね、、、
+                const strength = (playerManager.armor === SimulatedPlayerArmorMaterial.NETHERITE)
+                ? baseStrength * 2
+                : baseStrength;
+
+                player.applyKnockback(direction.x, direction.z, strength * (Math.random() / 2 + 1), player.getVelocity().y);
                 player.isSneaking = true;
             }
         }
@@ -876,20 +986,20 @@ system.runInterval(() => {
                 if (system.currentTick % 10 === 0) {
                     player.setRotation(Vector3Builder.from({ x: 0, y: -1, z: 0 }).getRotation2d());
                     player.setItem(new ItemStack(internalCommonConfig.blockMaterial.getAsItemType()), 3, true);
-                    placeBlockAndJump();
+                    placeBlockAndJump(playerManager);
                 }
             }
             else {
                 if (Math.abs(target.location.y - location.y) <= 2) {
                     player.setItem(new ItemStack(internalCommonConfig.blockMaterial.getAsItemType()), 3, true);
-                    placeBlockAsPath();
+                    placeBlockAsPath(playerManager);
                 }
 
                 const v = Vector3Builder.from(location).getDirectionTo(target.location);
                 player.setRotation(v.getRotation2d());
                 player.moveRelative(0, 1);
 
-                if (system.currentTick % 20 === 0) {
+                if (system.currentTick % 12 === 0) {
                     if (distance > 5 && distance < 9) {
                         player.setItem(playerManager.projectile.clone(), 2, true);
                         player.useItemInSlot(2);
@@ -951,32 +1061,3 @@ system.runInterval(() => {
 
     world.setDynamicProperty("simulated_player:temporary_blocks", JSON.stringify(temporaryBlocks));
 }, 20);
-
-interface TemporaryBlock {
-    readonly location: Vector3;
-
-    readonly dimensionId: string;
-
-    seconds: number;
-}
-
-function putTemporaryBlock(manager: SimulatedPlayerManager, block: Block) {
-    manager.getAsGameTestPlayer().attack();
-
-    block.setType(internalCommonConfig.blockMaterial.getAsBlockType());
-
-    const temporaryBlocks: TemporaryBlock[] = JSON.parse((world.getDynamicProperty("simulated_player:temporary_blocks") ?? "[]") as string);
-
-    temporaryBlocks.push({
-        dimensionId: block.dimension.id,
-        location: block.location,
-        seconds: internalCommonConfig.blockLifespanSeconds
-    });
-
-    world.setDynamicProperty("simulated_player:temporary_blocks", JSON.stringify(temporaryBlocks));
-
-    SimulatedPlayerEventHandlerRegistry.get("onPlaceBlock").call({
-        "simulatedPlayerManager": manager,
-        "block": block
-    });
-}
