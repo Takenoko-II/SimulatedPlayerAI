@@ -1,6 +1,7 @@
 import { world, Player, system } from "@minecraft/server";
 import { RandomHandler } from "./util/Random";
-import { SimulatedPlayerAI, SimulatedPlayerArmorMaterial, SimulatedPlayerManager, SimulatedPlayerWeaponMaterial } from "./SimulatedPlayerManager";
+import { SimulatedPlayerAI, SimulatedPlayerArmorMaterial, SimulatedPlayerAuxiliary, SimulatedPlayerManager, SimulatedPlayerSpawnRequest, SimulatedPlayerWeaponMaterial } from "./SimulatedPlayerManager";
+import { Material } from "./lib/Material";
 /*
 import "./lib/bds_enhanser";
 
