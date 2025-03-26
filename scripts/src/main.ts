@@ -1,6 +1,6 @@
 import { world, Player, system, ItemStack } from "@minecraft/server";
 import { RandomHandler } from "./util/Random";
-import { SimulatedPlayerAI, SimulatedPlayerArmorMaterial, SimulatedPlayerAuxiliary, SimulatedPlayerManager, SimulatedPlayerSpawnRequest, SimulatedPlayerWeaponMaterial } from "./SimulatedPlayerManager";
+import { SimulatedPlayerAI, SimulatedPlayerArmorMaterial, SimulatedPlayerAuxiliary, SimulatedPlayerManager, SimulatedPlayerSpawnRequest, SimulatedPlayerWeaponMaterial, SimulatedPlayerEventHandlerRegistry } from "./SimulatedPlayerManager";
 import { Material } from "./lib/Material";
 
 SimulatedPlayerManager.events.on("onDie", event => {
@@ -65,3 +65,9 @@ SimulatedPlayerManager.commonConfig.followRange = 40;
 await system.waitTicks(1);
 
 console.log("END: Early Execution");
+
+SimulatedPlayerManager.events.on("onInteractedByPlayer", event => {
+    if (event.interacter.isSneaking) {
+        event.simulatedPlayerManager.openConfig(event.interacter);
+    }
+});

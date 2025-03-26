@@ -6,7 +6,7 @@ import { MinecraftDimensionTypes } from "./lib/@minecraft/vanilla-data/lib/index
 
 import { ActionFormWrapper, MessageFormWrapper, ModalFormWrapper } from "./lib/UI-2.0";
 import { Vector3Builder } from "./util/Vector";
-import { Material, MaterialTag } from "./lib/Material";
+import { Material } from "./lib/Material";
 import { RandomHandler } from "./util/Random";
 
 /**
@@ -122,6 +122,10 @@ interface SimulatedPlayerAttackEntityEvent extends SimulatedPlayerEvent {
     readonly cause: EntityDamageCause;
 }
 
+interface SimulatedPlayerInteractedByPlayerEvent extends SimulatedPlayerEvent {
+    readonly interacter: Player;
+}
+
 type SimulatedPlayerEventTypes = {
     readonly onHealthChange: SimulatedPlayerHealthChangeEvent;
 
@@ -134,6 +138,8 @@ type SimulatedPlayerEventTypes = {
     readonly onPlaceBlock: SimulatedPlayerPlaceBlockEvent;
 
     readonly onAttack: SimulatedPlayerAttackEntityEvent;
+
+    readonly onInteractedByPlayer: SimulatedPlayerInteractedByPlayerEvent;
 }
 
 interface SimulatedPlayerCommonConfig {
@@ -351,6 +357,10 @@ export class SimulatedPlayerManager {
                 resolve();
             }, 1);
         });
+    }
+
+    public openConfig(player: Player) {
+        form.config(this).open(player);
     }
 
     /**
@@ -667,7 +677,7 @@ const form = {
 
 const simulatedPlayerManagers: Set<SimulatedPlayerManager> = new Set();
 
-class SimulatedPlayerEventHandlerRegistry<T extends keyof SimulatedPlayerEventTypes> {
+export class SimulatedPlayerEventHandlerRegistry<T extends keyof SimulatedPlayerEventTypes> {
     private readonly __name__: T;
 
     private readonly __handlers__: Map<number, (event: SimulatedPlayerEventTypes[T]) => void> = new Map();
@@ -721,6 +731,8 @@ class SimulatedPlayerEventHandlerRegistry<T extends keyof SimulatedPlayerEventTy
     public static readonly onPlaceBlock = new this("onPlaceBlock");
 
     public static readonly onAttack = new this("onAttack");
+
+    public static readonly onInteractedByPlayer = new this("onInteractedByPlayer");
 }
 
 world.afterEvents.entityHealthChanged.subscribe(event => {
@@ -819,6 +831,18 @@ world.afterEvents.entityHurt.subscribe(event => {
     });
 });
 
+world.beforeEvents.playerInteractWithEntity.subscribe(async event => {
+    const manager = SimulatedPlayerManager.getById(event.target.id);
+
+    if (manager === undefined) return;
+
+    await Promise.resolve();
+
+    SimulatedPlayerEventHandlerRegistry.get("onInteractedByPlayer").call({
+        "simulatedPlayerManager": manager,
+        "interacter": event.player
+    });
+});
 
 const handledMap: Map<SimulatedPlayerManager, boolean> = new Map();
 const simulatedPlayerFallingTicks: Map<SimulatedPlayerManager, number> = new Map();
