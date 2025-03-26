@@ -60,6 +60,7 @@ register("simulated_player", "spawn", test => {
     );
 
     player.teleport(request.spawnPoint ?? Vector3Builder.from(world.getDefaultSpawnLocation()).add({ x: 0.5, y: 0.5, z: 0.5 }));
+    player.addTag(SimulatedPlayerManager.PUBLIC_COMMAND_TAG);
 
     if (typeof request.onCreate === "function") {
         request.onCreate(request.newManager(player), Date.now() - request.time);
@@ -437,6 +438,8 @@ export class SimulatedPlayerManager {
             SimulatedPlayerEventHandlerRegistry.remove(id);
         }
     };
+
+    public static readonly PUBLIC_COMMAND_TAG: string = "simulated_player:identifier";
 
     /**
      * すべてのSimulatedPlayerに共通する設定を扱う
