@@ -380,6 +380,8 @@ export class Vector3Builder implements Vector3 {
     }
 
     public static isValidVector3(value: unknown): value is Vector3 {
+        if (typeof value !== "object" || value === null) return false;
+
         const x: unknown = value["x"];
         const y: unknown = value["y"];
         const z: unknown = value["z"];
@@ -650,6 +652,8 @@ export class TripleAxisRotationBuilder implements Vector2 {
     }
 
     public static isValidVector2(value: unknown): value is Vector2 {
+        if (typeof value !== "object" || value === null) return false;
+
         const x: unknown = value["x"];
         const y: unknown = value["y"];
 

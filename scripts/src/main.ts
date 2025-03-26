@@ -1,16 +1,8 @@
-import { world, Player, system } from "@minecraft/server";
+import { world, Player, system, ItemStack } from "@minecraft/server";
 import { RandomHandler } from "./util/Random";
 import { SimulatedPlayerAI, SimulatedPlayerArmorMaterial, SimulatedPlayerAuxiliary, SimulatedPlayerManager, SimulatedPlayerSpawnRequest, SimulatedPlayerWeaponMaterial } from "./SimulatedPlayerManager";
 import { Material } from "./lib/Material";
-/*
-import "./lib/bds_enhanser";
 
-world.afterEvents.playerSpawn.subscribe((ev) => {
-    if (ev.initialSpawn) {
-        ev.player.teleport({ x: 0.5, y: 0.5, z: 0.5 }, { rotation: { x: 0, y: 0 } });
-    };
-});
-*/
 SimulatedPlayerManager.events.on("onDie", event => {
     system.runTimeout(() => {
         if (!event.simulatedPlayerManager.isValid()) return;
@@ -37,6 +29,9 @@ system.afterEvents.scriptEventReceive.subscribe(event => {
                     player.ai = SimulatedPlayerAI.COMBAT;
                     player.weapon = SimulatedPlayerWeaponMaterial.WOODEN;
                     player.armor = SimulatedPlayerArmorMaterial.LEATHER;
+                    player.canUseEnderPearl = true;
+                    player.auxiliary = SimulatedPlayerAuxiliary.TOTEM;
+                    player.projectile = new ItemStack(Material.SNOWBALL.getAsItemType(), 16);
                 }
             });
             break;
@@ -66,3 +61,7 @@ system.afterEvents.scriptEventReceive.subscribe(event => {
 });
 
 SimulatedPlayerManager.commonConfig.followRange = 40;
+
+await system.waitTicks(1);
+
+console.log("END: Early Execution");

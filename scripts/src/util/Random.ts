@@ -81,6 +81,8 @@ export class RandomHandler {
             totalWeight += weight;
             if (totalWeight >= random) return index;
         }
+
+        throw new Error("NEVER HAPPENS");
     }
 }
 

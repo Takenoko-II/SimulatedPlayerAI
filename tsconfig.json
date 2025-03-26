@@ -4,11 +4,11 @@
     "compilerOptions": {
       "allowJs": true,
       "checkJs": true,
-      "module": "ES2020",
-      "target": "es2021",
+      "module": "ES2022",
+      "target": "ES2022",
       "moduleResolution": "node",
       "esModuleInterop": true,
-      "strictNullChecks": false,
+      "strictNullChecks": true,
       "rootDir": "scripts/src",
       "outDir": "scripts/dest"
     }

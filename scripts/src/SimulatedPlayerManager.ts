@@ -4,7 +4,7 @@ import { register, SimulatedPlayer } from "@minecraft/server-gametest";
 
 import { MinecraftDimensionTypes } from "./lib/@minecraft/vanilla-data/lib/index";
 
-import { ActionFormWrapper, MessageFormWrapper, ModalFormWrapper } from "./lib/UI";
+import { ActionFormWrapper, MessageFormWrapper, ModalFormWrapper } from "./lib/UI-2.0";
 import { Vector3Builder } from "./util/Vector";
 import { Material, MaterialTag } from "./lib/Material";
 import { RandomHandler } from "./util/Random";
@@ -51,7 +51,7 @@ register("simulated_player", "spawn", test => {
         throw new Error();
     }
 
-    const request = nextSpawnRequestQueue.shift();
+    const request = nextSpawnRequestQueue.shift()!;
 
     const player = test.spawnSimulatedPlayer(
         { x: 0, y: 0, z: 0 },
@@ -241,7 +241,7 @@ export class SimulatedPlayerManager {
 
     public set armor(value) {
         this.__armor__ = value;
-        const equippable = this.getAsServerPlayer().getComponent(EntityComponentTypes.Equippable);
+        const equippable = this.getAsServerPlayer().getComponent(EntityComponentTypes.Equippable)!;
         if (this.__armor__ === "none") {
             equippable.setEquipment(EquipmentSlot.Head);
             // @ts-ignore
@@ -268,11 +268,11 @@ export class SimulatedPlayerManager {
     public set weapon(value) {
         this.__weapon__ = value;
         if (this.__weapon__ === "none") {
-            this.getAsServerPlayer().getComponent(EntityComponentTypes.Inventory).container.setItem(0);
+            this.getAsServerPlayer().getComponent(EntityComponentTypes.Inventory)!.container.setItem(0);
             this.getAsServerPlayer().selectedSlotIndex = 0;
         }
         else {
-            this.getAsServerPlayer().getComponent(EntityComponentTypes.Inventory).container.setItem(0, new ItemStack(this.__weapon__ + "_sword"));
+            this.getAsServerPlayer().getComponent(EntityComponentTypes.Inventory)!.container.setItem(0, new ItemStack(this.__weapon__ + "_sword"));
             this.getAsServerPlayer().selectedSlotIndex = 0;
         }
     }
@@ -287,7 +287,7 @@ export class SimulatedPlayerManager {
     public set auxiliary(value) {
         this.__auxiliary__ = value;
 
-        const offHandEquipment = this.getAsServerPlayer().getComponent(EntityComponentTypes.Equippable).getEquipmentSlot(EquipmentSlot.Offhand);
+        const offHandEquipment = this.getAsServerPlayer().getComponent(EntityComponentTypes.Equippable)!.getEquipmentSlot(EquipmentSlot.Offhand);
 
         if (this.__auxiliary__ === "none") {
             offHandEquipment.setItem();
@@ -323,7 +323,7 @@ export class SimulatedPlayerManager {
      * Player#isValid() && SimulatedPlayer#isValid()を返す関数
      */
     public isValid(): boolean {
-        return this.player.isValid() && this.getAsServerPlayer().isValid();
+        return this.player.isValid && this.getAsServerPlayer().isValid;
     }
 
     public equip(): void {
@@ -487,42 +487,70 @@ const form = {
     main(): ActionFormWrapper {
         return new ActionFormWrapper()
         .title("Simulated Player Manager")
-        .button("§a召喚", "textures/ui/color_plus", player => {
-            form.spawn().open(player);
+        .button({
+            name: "§a召喚",
+            iconPath: "textures/ui/color_plus",
+            on(player) {
+                form.spawn().open(player);
+            }
         })
-        .button("§9コンフィグ", "textures/ui/settings_glyph_color_2x", player => {
-            form.list(manager => {
-                form.config(manager).open(player);
-            }).open(player);
+        .button({
+            name: "§9コンフィグ",
+            iconPath: "textures/ui/settings_glyph_color_2x",
+            on(player) {
+                form.list(manager => {
+                    form.config(manager).open(player);
+                }).open(player);
+            }
         })
-        .button("§3再読み込み", "textures/items/ender_pearl", player => {
-            form.list(manager => {
-                form.reload(manager);
-                form.main().open(player);
-            }).open(player);
+        .button({
+            name: "§3再読み込み",
+            iconPath: "textures/items/ender_pearl",
+            on(player) {
+                form.list(manager => {
+                    form.reload(manager);
+                    form.main().open(player);
+                }).open(player);
+            }
         })
-        .button("§c削除", "textures/ui/trash_default", player => {
-            form.list(manager => {
-                form.delete(manager).open(player);
-            }).open(player);
+        .button({
+            name: "§c削除",
+            iconPath: "textures/ui/trash_default",
+            on(player) {
+                form.list(manager => {
+                    form.delete(manager).open(player);
+                }).open(player);
+            }
         })
-        .button("§4全プレイヤーを削除", "textures/ui/realms_red_x", player => {
-            form.deleteAll().open(player);
-        });
+        .button({
+            name: "§4全プレイヤーを削除",
+            iconPath: "textures/ui/realms_red_x",
+            on(player) {
+                form.deleteAll().open(player);
+            }
+        })
     },
 
     spawn(): ModalFormWrapper {
         return new ModalFormWrapper()
         .title("Spawn Simulated Player")
-        .textField("name", "プレイヤー名", "おなまえ", "Steve")
-        .onSubmit(event => {
-            SimulatedPlayerManager.requestSpawnPlayer({
-                name: event.getTextField("name"),
-                onCreate(player, time) {
-                    player.ai = SimulatedPlayerAI.COMBAT;
-                    console.warn(player.getAsServerPlayer().name + " joined. (" + time + "ms)");
-                }
-            });
+        .textField({
+            id: "name",
+            label: "プレイヤー名",
+            placeHolder: "おなまえ",
+            defaultValue: "Steve"
+        })
+        .submitButton({
+            name: "召喚する",
+            on(event) {
+                SimulatedPlayerManager.requestSpawnPlayer({
+                    name: event.getTextFieldInput("name")!,
+                    onCreate(player, time) {
+                        player.ai = SimulatedPlayerAI.COMBAT;
+                        console.warn(player.getAsServerPlayer().name + " joined. (" + time + "ms)");
+                    }
+                });
+            }
         });
     },
 
@@ -530,12 +558,17 @@ const form = {
         return new MessageFormWrapper()
         .title("Delete Simulated Player")
         .body(manager.getAsGameTestPlayer().name + "を削除しますか？")
-        .button1("y")
-        .button2("n", player => {
-            form.main().open(player);
+        .button1({
+            name: "y",
+            on(player) {
+                form.main().open(player);
+            }
         })
-        .onPush(b => b.name === "y", event => {
-            manager.getAsGameTestPlayer().disconnect();
+        .button2({
+            name: "n",
+            on(player) {
+                manager.getAsGameTestPlayer().disconnect();
+            }
         });
     },
 
@@ -543,23 +576,37 @@ const form = {
         return new MessageFormWrapper()
         .title("Delete All Simulated Player")
         .body("全プレイヤーを削除しますか？")
-        .button1("y")
-        .button2("n", player => {
-            form.main().open(player);
+        .button1({
+            name: "y",
+            on(player) {
+                form.main().open(player);
+            }
         })
-        .onPush(b => b.name === "y", event => {
-            SimulatedPlayerManager.getManagers().forEach(manager => manager.getAsGameTestPlayer().disconnect());
+        .button2({
+            name: "n",
+            on(player) {
+                SimulatedPlayerManager.getManagers().forEach(manager => manager.getAsGameTestPlayer().disconnect());
+            }
         });
     },
 
     list(callback: (manager: SimulatedPlayerManager) => void): ActionFormWrapper {
-        const list = new ActionFormWrapper();
-        list.title("List of Simulated Player");
+        const list = new ActionFormWrapper()
+            .title("List of Simulated Player");
+
         for (const player of SimulatedPlayerManager.getManagers()) {
-            list.button("§6" + player.getAsGameTestPlayer().name, ["player", player.getAsGameTestPlayer().id]);
+            list.button({
+                name: "§6" + player.getAsGameTestPlayer().name,
+                tags: ["player", player.getAsGameTestPlayer().id]
+            })
         }
-        list.button("Back", "textures/ui/back_button_default", player => {
-            form.main().open(player);
+
+        list.button({
+            name: "Back",
+            iconPath: "textures/ui/back_button_default",
+            on(player) {
+                form.main().open(player);
+            }
         })
         .onPush(button => button.tags.includes("player"), event => {
             const manager = SimulatedPlayerManager.getById(event.button.tags[1]);
@@ -576,15 +623,38 @@ const form = {
         const aiTypes = Object.values(SimulatedPlayerAI);
         return new ModalFormWrapper()
         .title("Simulated Player Config")
-        .dropdown("armor", "防具", armorMaterials, armorMaterials.indexOf(manager.armor))
-        .dropdown("weapon", "近接武器", weaponMaterials, weaponMaterials.indexOf(manager.weapon))
-        .dropdown("auxiliary", "オフハンド", auxiliaries, auxiliaries.indexOf(manager.auxiliary))
-        .dropdown("ai", "AI", aiTypes, aiTypes.indexOf(manager.ai))
-        .onSubmit(event => {
-            manager.ai = aiTypes.find(ai => ai === event.getDropdown("ai"));
-            manager.armor = armorMaterials.find(armor => armor === event.getDropdown("armor"));
-            manager.weapon = weaponMaterials.find(weapon => weapon === event.getDropdown("weapon"));
-            manager.auxiliary = auxiliaries.find(auxiliary => auxiliary === event.getDropdown("auxiliary"));
+        .dropdown({
+            id: "armor",
+            label: "防具",
+            list: armorMaterials.map(v => ({ id: v, text: v })),
+            defaultValueIndex: armorMaterials.indexOf(manager.armor)
+        })
+        .dropdown({
+            id: "weapon",
+            label: "近接武器",
+            list: weaponMaterials.map(v => ({ id: v, text: v })),
+            defaultValueIndex: weaponMaterials.indexOf(manager.weapon)
+        })
+        .dropdown({
+            id: "auxiliary",
+            label: "オフハンド",
+            list: auxiliaries.map(v => ({ id: v, text: v })),
+            defaultValueIndex: auxiliaries.indexOf(manager.auxiliary)
+        })
+        .dropdown({
+            id: "ai",
+            label: "AI",
+            list: aiTypes.map(v => ({ id: v, text: v })),
+            defaultValueIndex: aiTypes.indexOf(manager.ai)
+        })
+        .submitButton({
+            name: { translate: "gui.submit" },
+            on(event) {
+                manager.ai = aiTypes.find(ai => ai === event.getDropdownInput("ai")?.value.id)!;
+                manager.armor = armorMaterials.find(armor => armor === event.getDropdownInput("armor")?.value.id)!;
+                manager.weapon = weaponMaterials.find(weapon => weapon === event.getDropdownInput("weapon")?.value.id)!;
+                manager.auxiliary = auxiliaries.find(auxiliary => auxiliary === event.getDropdownInput("auxiliary")?.value.id)!;
+            }
         });
     },
 
@@ -623,10 +693,12 @@ class SimulatedPlayerEventHandlerRegistry<T extends keyof SimulatedPlayerEventTy
 
     private static readonly __registries__: Set<SimulatedPlayerEventHandlerRegistry<keyof SimulatedPlayerEventTypes>> = new Set();
 
-    public static get<T extends keyof SimulatedPlayerEventTypes>(event: T): SimulatedPlayerEventHandlerRegistry<T> | undefined {
+    public static get<T extends keyof SimulatedPlayerEventTypes>(event: T): SimulatedPlayerEventHandlerRegistry<T> {
         for (const registry of this.__registries__) {
             if (registry.__name__ === event) return registry as SimulatedPlayerEventHandlerRegistry<T>;
         }
+
+        throw new TypeError("無効なイベント名です");
     }
 
     public static remove(id: number): void {
@@ -659,7 +731,7 @@ world.afterEvents.entityHealthChanged.subscribe(event => {
 
     const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(value, max));
 
-    const maxHealth = manager.getAsServerPlayer().getComponent(EntityComponentTypes.Health).effectiveMax;
+    const maxHealth = manager.getAsServerPlayer().getComponent(EntityComponentTypes.Health)!.effectiveMax;
 
     const value = Math.floor(clamp(event.newValue, 0, maxHealth) * 10) / 10;
 
@@ -678,7 +750,7 @@ world.afterEvents.entityDie.subscribe(event => {
     if (manager === undefined) return;
     if (!manager.isValid()) return;
 
-    SimulatedPlayerEventHandlerRegistry.get("onDie").call({
+    SimulatedPlayerEventHandlerRegistry.get("onDie")!.call({
         "damageSource": event.damageSource,
         "simulatedPlayerManager": manager
     });
@@ -797,7 +869,7 @@ const excludeTypes = [
 function placeBlockAndJump(manager: SimulatedPlayerManager) {
     const player = manager.getAsGameTestPlayer();
     const location = manager.getAsServerPlayer().location;
-    const block = manager.getAsServerPlayer().dimension.getBlock(location);
+    const block = manager.getAsServerPlayer().dimension.getBlock(location)!;
 
     player.jump();
 
@@ -813,9 +885,11 @@ function placeBlockAndJump(manager: SimulatedPlayerManager) {
 function placeBlockAsPath(manager: SimulatedPlayerManager) {
     const player = manager.getAsGameTestPlayer();
     const location = manager.getAsServerPlayer().location;
-    const block = manager.getAsServerPlayer().dimension.getBlock(location).below();
+    const block = manager.getAsServerPlayer().dimension.getBlock(location)?.below();
 
-    if (!block.isSolid && !block.below().isSolid && player.isOnGround) {
+    if (block === undefined) return;
+
+    if (!block.isSolid && !block.below()?.isSolid && player.isOnGround) {
         putTemporaryBlock(manager, block);
     }
 }
@@ -900,7 +974,7 @@ system.runInterval(() => {
         if (player.isSneaking && !(handledMap.get(playerManager) ?? false)) {
             handledMap.set(playerManager, true);
             system.runTimeout(() => {
-                if (!player.isValid()) return;
+                if (!player.isValid) return;
                 player.jump();
                 player.isSneaking = false;
                 handledMap.set(playerManager, false);
@@ -939,7 +1013,7 @@ system.runInterval(() => {
         .filter(b => b !== undefined);
 
         if (entities.length > 0 && system.currentTick % 5 === 0 && blocks.some(block => block.isSolid) && (player.getVelocity().x === 0 || player.getVelocity().z === 0)) {
-            if (blocks.every(block => block.above().isSolid === false)) {
+            if (blocks.every(block => block.above()?.isSolid === false)) {
                 player.jump();
                 player.moveRelative(0, 1, 1);
                 // player.applyKnockback(player.getViewDirection().x, player.getViewDirection().z, 0.5, player.getVelocity().y);
@@ -948,7 +1022,7 @@ system.runInterval(() => {
                 placeBlockAndJump(playerManager);
             }
         }
-        else if (entities.length > 0 && system.currentTick % 5 === 0 && blocks.some(block => block.above().isSolid) && (player.getVelocity().x === 0 || player.getVelocity().z === 0)) {
+        else if (entities.length > 0 && system.currentTick % 5 === 0 && blocks.some(block => block.above()?.isSolid) && (player.getVelocity().x === 0 || player.getVelocity().z === 0)) {
             placeBlockAndJump(playerManager);
         }
 
@@ -975,7 +1049,7 @@ system.runInterval(() => {
                 ? baseStrength * 2
                 : baseStrength;
 
-                player.applyKnockback(direction.x, direction.z, strength * (Math.random() / 2 + 1), player.getVelocity().y);
+                player.applyKnockback(direction.clone().length(strength * (Math.random() / 2 + 1)), player.getVelocity().y);
                 player.isSneaking = true;
             }
         }
@@ -1029,6 +1103,11 @@ system.runInterval(() => {
     for (const info of temporaryBlocks) {
         try {
             const block = world.getDimension(info.dimensionId).getBlock(info.location);
+
+            if (block === undefined) {
+                continue;
+            }
+
             if (block.permutation.type.id === internalCommonConfig.blockMaterial.getAsBlockType().id) {
                 if (info.seconds > 0) {
                     info.seconds--;
