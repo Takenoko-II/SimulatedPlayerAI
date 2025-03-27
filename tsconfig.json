@@ -9,6 +9,7 @@
       "moduleResolution": "node",
       "esModuleInterop": true,
       "strictNullChecks": true,
+      "strict": true,
       "rootDir": "scripts/src",
       "outDir": "scripts/dest"
     }

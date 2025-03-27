@@ -1,13 +1,18 @@
-import { world, Player, system, ItemStack } from "@minecraft/server";
-import { RandomHandler } from "./util/Random";
-import { SimulatedPlayerAI, SimulatedPlayerArmorMaterial, SimulatedPlayerAuxiliary, SimulatedPlayerManager, SimulatedPlayerSpawnRequest, SimulatedPlayerWeaponMaterial, SimulatedPlayerEventHandlerRegistry } from "./SimulatedPlayerManager";
+import { Player, system, ItemStack } from "@minecraft/server";
+import { SimulatedPlayerManager } from "./simulated_player/SimulatedPlayerManager";
 import { Material } from "./lib/Material";
+import { SIMULATED_PLAYER_DEFAULT_NAME, SimulatedPlayerAI, SimulatedPlayerArmorMaterial, SimulatedPlayerAuxiliary, SimulatedPlayerWeaponMaterial } from "./simulated_player/enumerations";
 
-SimulatedPlayerManager.events.on("onDie", event => {
-    system.runTimeout(() => {
-        if (!event.simulatedPlayerManager.isValid()) return;
-        event.simulatedPlayerManager.getAsGameTestPlayer().respawn();
-    }, 40);
+SimulatedPlayerManager.events.on("onDie", async event => {
+    await system.waitTicks(60);
+    if (!event.simulatedPlayerManager.isValid()) return;
+    event.simulatedPlayerManager.getAsGameTestPlayer().respawn();
+});
+
+SimulatedPlayerManager.events.on("onInteractedByPlayer", event => {
+    if (event.interacter.isSneaking) {
+        event.simulatedPlayerManager.openConfig(event.interacter);
+    }
 });
 
 system.afterEvents.scriptEventReceive.subscribe(event => {
@@ -18,13 +23,13 @@ system.afterEvents.scriptEventReceive.subscribe(event => {
     switch (id) {
         case "manager": {
             if (event.sourceEntity instanceof Player) {
-                SimulatedPlayerManager.showAsForm(event.sourceEntity);
+                SimulatedPlayerManager.openManager(event.sourceEntity);
             }
             break;
         }
         case "spawn": {
             SimulatedPlayerManager.requestSpawnPlayer({
-                name: event.message,
+                name: event.message.length === 0 ? SIMULATED_PLAYER_DEFAULT_NAME : event.message,
                 onCreate(player) {
                     player.ai = SimulatedPlayerAI.COMBAT;
                     player.weapon = SimulatedPlayerWeaponMaterial.WOODEN;
@@ -46,7 +51,7 @@ system.afterEvents.scriptEventReceive.subscribe(event => {
             SimulatedPlayerManager.getManagers().forEach(manager => manager.getAsGameTestPlayer().disconnect());
             for (let i = 0; i < 8; i++) {
                 SimulatedPlayerManager.requestSpawnPlayer({
-                    name: RandomHandler.uuid(),
+                    name: "Player(" + (i + 1) + ")",
                     onCreate(player, time) {
                         player.ai = SimulatedPlayerAI.COMBAT;
                         player.weapon = SimulatedPlayerWeaponMaterial.DIAMOND;
@@ -57,6 +62,12 @@ system.afterEvents.scriptEventReceive.subscribe(event => {
             }
             break;
         }
+        case "test": {
+            SimulatedPlayerManager.getManagers().forEach(manager => {
+                manager.behaviorState.preparingForAttack = false;
+            });
+            break;
+        }
     }
 });
 
@@ -64,10 +75,4 @@ SimulatedPlayerManager.commonConfig.followRange = 40;
 
 await system.waitTicks(1);
 
-console.log("END: Early Execution");
-
-SimulatedPlayerManager.events.on("onInteractedByPlayer", event => {
-    if (event.interacter.isSneaking) {
-        event.simulatedPlayerManager.openConfig(event.interacter);
-    }
-});
+console.log("'Early Execution' has been ended.");
