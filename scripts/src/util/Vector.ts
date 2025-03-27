@@ -1,7 +1,27 @@
-import { Vector2, Vector3 } from "@minecraft/server";
+import { Vector2, Vector3, VectorXZ } from "@minecraft/server";
 
 function isValidNumber(x: unknown): x is number {
     return typeof x === "number" && !Number.isNaN(x);
+}
+
+export interface ForzenVector3 extends Vector3 {
+    readonly x: number;
+
+    readonly y: number;
+
+    readonly z: number;
+}
+
+export interface FrozenVector2 extends Vector2 {
+    readonly x: number;
+
+    readonly y: number;
+}
+
+export interface FrozenVectorXZ extends VectorXZ {
+    readonly x: number;
+
+    readonly z: number;
 }
 
 export class Vector3Builder implements Vector3 {
@@ -346,7 +366,7 @@ export class Vector3Builder implements Vector3 {
         const cos = Math.cos(angleInRad);
         const { x, y, z } = axis;
 
-        const matrix = [
+        const matrix: number[][] = [
             [
                 cos + x * x * (1 - cos),
                 x * y * (1 - cos) - z * sin,
@@ -364,31 +384,53 @@ export class Vector3Builder implements Vector3 {
             ]
         ];
 
-        return new Vector3Builder(
-            matrix[0][0] * this.x + matrix[0][1] * this.y + matrix[0][2] * this.z,
-            matrix[1][0] * this.x + matrix[1][1] * this.y + matrix[1][2] * this.z,
-            matrix[2][0] * this.x + matrix[2][1] * this.y + matrix[2][2] * this.z
-        );
+        const a: number = matrix[0][0] * this.x + matrix[0][1] * this.y + matrix[0][2] * this.z;
+        const b: number = matrix[1][0] * this.x + matrix[1][1] * this.y + matrix[1][2] * this.z;
+        const c: number = matrix[2][0] * this.x + matrix[2][1] * this.y + matrix[2][2] * this.z;
+
+        this.__x__ = a;
+        this.__y__ = b;
+        this.__z__ = c;
+
+        return this;
     }
 
     public isZero(): boolean {
         return this.equals(Vector3Builder.zero());
     }
 
-    public asInterface(): Vector3 {
-        return { x: this.x, y: this.y, z: this.z };
+    public freeze(): ForzenVector3 {
+        return Object.freeze({ x: this.x, y: this.y, z: this.z });
+    }
+
+    public freezeAsXZ(): FrozenVectorXZ {
+        return Object.freeze({ x: this.x, z: this.z });
     }
 
     public static isValidVector3(value: unknown): value is Vector3 {
-        if (typeof value !== "object" || value === null) return false;
+        if (value === undefined || value === null) {
+            return false;
+        }
 
         const x: unknown = value["x"];
         const y: unknown = value["y"];
         const z: unknown = value["z"];
 
-        return typeof x === "number" && !Number.isNaN(x)
-            && typeof y === "number" && !Number.isNaN(y)
-            && typeof z === "number" && !Number.isNaN(z);
+        return isValidNumber(x)
+            && isValidNumber(y)
+            && isValidNumber(z);
+    }
+
+    public static isValidVectorXZ(value: unknown): value is VectorXZ {
+        if (value === undefined || value === null) {
+            return false;
+        }
+
+        const x: unknown = value["x"];
+        const z: unknown = value["z"];
+
+        return isValidNumber(x)
+            && isValidNumber(z);
     }
 
     public static zero(): Vector3Builder {
@@ -423,8 +465,20 @@ export class Vector3Builder implements Vector3 {
         return new Vector3Builder(value, value, value);
     }
 
-    public static from(vector3: Vector3): Vector3Builder {
-        return new this(vector3.x, vector3.y, vector3.z);
+    public static from(vector3: Vector3): Vector3Builder;
+
+    public static from(vectorXZ: VectorXZ, y?: number): Vector3Builder;
+
+    public static from(vector: Vector3 | VectorXZ, y: number = 0): Vector3Builder {
+        if (this.isValidVector3(vector)) {
+            return new this(vector.x, vector.y, vector.z);
+        }
+        else if (this.isValidVectorXZ(vector)) {
+            return new this(vector.x, y, vector.z);
+        }
+        else {
+            throw new TypeError("Unknown Type Value");
+        }
     }
 
     public static min(a: Vector3, b: Vector3): Vector3Builder {
@@ -577,7 +631,11 @@ export class TripleAxisRotationBuilder implements Vector2 {
     }
 
     public invert(): TripleAxisRotationBuilder {
-        return this.scale(-1);
+        const rotation: TripleAxisRotationBuilder = this.getLocalAxisProvider().back();
+        this.__yaw__ = rotation.__yaw__;
+        this.__pitch__ = rotation.__pitch__;
+        this.__roll__ = rotation.__roll__;
+        return this;
     }
 
     public clamp(min: TripleAxisRotationBuilder, max: TripleAxisRotationBuilder): TripleAxisRotationBuilder;
@@ -639,26 +697,28 @@ export class TripleAxisRotationBuilder implements Vector2 {
         );
     }
 
-    public getLocalAxisProvider(): RotatedLocalAxisProvider {
-        return new RotatedLocalAxisProvider(this);
+    public getLocalAxisProvider(): LocalAxisProvider {
+        return new LocalAxisProvider(this);
     }
 
     public isZero(): boolean {
         return this.equals(TripleAxisRotationBuilder.zero());
     }
 
-    public asInterface(): Vector2 {
-        return { x: this.x, y: this.y };
+    public freeze(): FrozenVector2 {
+        return Object.freeze({ x: this.x, y: this.y });
     }
 
     public static isValidVector2(value: unknown): value is Vector2 {
-        if (typeof value !== "object" || value === null) return false;
+        if (value === undefined || value === null) {
+            return false;
+        }
 
         const x: unknown = value["x"];
         const y: unknown = value["y"];
 
-        return typeof x === "number" && !Number.isNaN(x)
-            && typeof y === "number" && !Number.isNaN(y);
+        return isValidNumber(x)
+            && isValidNumber(y);
     }
 
     public static zero(): TripleAxisRotationBuilder {
@@ -672,60 +732,80 @@ export class TripleAxisRotationBuilder implements Vector2 {
     public static from(vector2: Vector2): TripleAxisRotationBuilder {
         return new this(vector2.y, vector2.x, 0);
     }
+
+    public static ofAxes(x: Vector3Builder, y: Vector3Builder, z: Vector3Builder) {
+        return new this(
+            Math.atan2(-z.x, z.z) * 180 / Math.PI,
+            Math.asin(-z.y) * 180 / Math.PI,
+            Math.atan2(x.y, y.y) * 180 / Math.PI
+        );
+    }
 }
 
-class RotatedLocalAxisProvider {
+class LocalAxisProvider {
     private readonly __rotation__: TripleAxisRotationBuilder;
 
     public constructor(rotation: TripleAxisRotationBuilder) {
         this.__rotation__ = rotation.clone();
     }
 
-    private rotate(vector3: Vector3Builder): Vector3Builder {
-        const roll = this.__rotation__.roll * Math.PI / 180;
-        const sin = Math.sin(roll);
-        const cos = Math.cos(roll);
-        const { x, y, z } = this.getZ();
-
-        const matrix = [
-            [
-                cos + x * x * (1 - cos),
-                x * y * (1 - cos) - z * sin,
-                x * z * (1 - cos) + y * sin
-            ],
-            [
-                y * x * (1 - cos) + z * sin,
-                cos + y * y * (1 - cos),
-                y * z * (1 - cos) - x * sin
-            ],
-            [
-                z * x * (1 - cos) - y * sin,
-                z * y * (1 - cos) + x * sin,
-                cos + z * z * (1 - cos)
-            ]
-        ];
-
-        return new Vector3Builder(
-            matrix[0][0] * vector3.x + matrix[0][1] * vector3.y + matrix[0][2] * vector3.z,
-            matrix[1][0] * vector3.x + matrix[1][1] * vector3.y + matrix[1][2] * vector3.z,
-            matrix[2][0] * vector3.x + matrix[2][1] * vector3.y + matrix[2][2] * vector3.z
-        );
-    }
-
-    private getRawVertical(): Vector3Builder {
-        const { x, z } = this.getZ();
-        return new Vector3Builder(z, 0, -x);
-    }
-
     public getX(): Vector3Builder {
-        return this.rotate(this.getRawVertical());
+        const forward: Vector3Builder = this.getZ();
+
+        return new Vector3Builder(forward.z, 0, -forward.x)
+            .normalize()
+            .rotate(forward, this.__rotation__.roll);
     }
 
     public getY(): Vector3Builder {
-        return this.rotate(this.getZ().clone().cross(this.getRawVertical()));
+        return this.getZ().cross(this.getX());
     }
 
     public getZ(): Vector3Builder {
         return this.__rotation__.getDirection3d();
+    }
+
+    public forward(): TripleAxisRotationBuilder {
+        return this.__rotation__.clone();
+    }
+
+    public back(): TripleAxisRotationBuilder {
+        return TripleAxisRotationBuilder.ofAxes(
+            this.getX().invert(),
+            this.getY(),
+            this.getZ().invert()
+        );
+    }
+
+    public left(): TripleAxisRotationBuilder {
+        return TripleAxisRotationBuilder.ofAxes(
+            this.getZ().invert(),
+            this.getY(),
+            this.getX()
+        );
+    }
+
+    public right(): TripleAxisRotationBuilder {
+        return TripleAxisRotationBuilder.ofAxes(
+            this.getZ(),
+            this.getY(),
+            this.getX().invert()
+        );
+    }
+
+    public up(): TripleAxisRotationBuilder {
+        return TripleAxisRotationBuilder.ofAxes(
+            this.getX(),
+            this.getZ().invert(),
+            this.getY()
+        );
+    }
+
+    public down(): TripleAxisRotationBuilder {
+        return TripleAxisRotationBuilder.ofAxes(
+            this.getX(),
+            this.getZ(),
+            this.getY().invert()
+        );
     }
 }
