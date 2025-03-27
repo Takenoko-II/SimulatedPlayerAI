@@ -22,9 +22,9 @@ export interface SimulatedPlayerSpawnRequest {
     readonly name: string;
 
     /**
-     * スポーンさせる位置(リスポーンポイントじゃないよ！)
+     * スポーン・リスポーンさせる位置
      */
-    readonly spawnPoint?: Vector3;
+    readonly respawnPoint?: Vector3;
 
     /**
      * ゲームモード(サバイバル推奨)
@@ -62,11 +62,14 @@ register("simulated_player", "spawn", test => {
         request.gameMode ?? GameMode.survival
     );
 
-    player.teleport(request.spawnPoint ?? Vector3Builder.from(world.getDefaultSpawnLocation()).add({ x: 0.5, y: 0.5, z: 0.5 }));
     player.addTag(SIMULATED_PLAYER_COMMAND_TAG);
 
+    const manager = request.newManager(player);
+
+    if (request.respawnPoint) manager.setRespawnPoint(request.respawnPoint);
+
     if (typeof request.onCreate === "function") {
-        request.onCreate(request.newManager(player), Date.now() - request.time);
+        request.onCreate(manager, Date.now() - request.time);
         ok = true;
     }
 })
@@ -82,7 +85,7 @@ interface SimulatedPlayerCommonConfig {
     /**
      * プレイヤーが設置するブロック
      */
-    readonly block: TemporaryBlockPlacementConfig
+    readonly block: TemporaryBlockPlacementConfig;
 }
 
 type DirectionLeftRight = "LEFT" | "RIGHT";
@@ -115,6 +118,8 @@ export class SimulatedPlayerManager {
 
     private __ai__: SimulatedPlayerAI = SimulatedPlayerAI.NONE;
 
+    private __respawnPoint__: Vector3Builder = Vector3Builder.from(world.getDefaultSpawnLocation()).add({ x: 0.5, y: 0.5, z: 0.5 });
+
     /**
      * 外部からの操作は非推奨
      */
@@ -138,6 +143,29 @@ export class SimulatedPlayerManager {
     private constructor(player: SimulatedPlayer) {
         this.player = player;
         SimulatedPlayerManager.__instanceSet__.add(this);
+
+        const that = this;
+
+        Object.defineProperties(player, {
+            getSpawnPoint: {
+                get() {
+                    return () => ({ dimension: that.getAsServerPlayer().dimension, ...that.getRespawnPoint() });
+                },
+                set(value) {
+                    throw new TypeError();
+                }
+            },
+            setSpawnPoint: {
+                get() {
+                    return () => {
+                        throw new Error("SimulatedPlayerManagerの管理下に置かれたインスタンスへの直接のリスポーンポイント操作は禁じられています");
+                    }
+                },
+                set(value) {
+                    throw new TypeError();
+                }
+            }
+        });
     }
 
     /**
@@ -239,6 +267,14 @@ export class SimulatedPlayerManager {
         this.__canUseEnderPearl__ = value;
     }
 
+    public getRespawnPoint(): Vector3Builder {
+        return this.__respawnPoint__.clone();
+    }
+
+    public setRespawnPoint(location: Vector3): void {
+        this.__respawnPoint__ = Vector3Builder.from(location);
+    }
+
     /**
      * Player#isValid() && SimulatedPlayer#isValid()を返す関数
      */
@@ -298,7 +334,7 @@ export class SimulatedPlayerManager {
      * このインスタンスに対応するプレイヤーを編集するためのフォームを開く
      * @param player フォームを開くプレイヤー
      */
-    public openConfig(player: Player) {
+    public openConfigForm(player: Player) {
         if (!this.isValid()) {
             throw new Error();
         }
@@ -488,9 +524,9 @@ export class SimulatedPlayerManager {
 
     /**
      * このクラスをフォームとしてプレイヤーに表示する関数
-     * @param player フォームを表示すす対象
+     * @param player フォームを表示する対象
      */
-    public static openManager(player: Player) {
+    public static openManagerForm(player: Player) {
         SimulatedPlayerManager.FORM.main().open(player);
     }
 
@@ -611,6 +647,8 @@ export class SimulatedPlayerManager {
                     tags: ["player", player.getAsGameTestPlayer().id]
                 })
             }
+
+            list.divider({ id: "div" });
     
             list.button({
                 name: "Back",
@@ -716,7 +754,8 @@ world.afterEvents.playerSpawn.subscribe(event => {
     if (manager === undefined) return;
     if (!manager.isValid()) return;
 
-    manager.getAsGameTestPlayer().teleport(Vector3Builder.from(world.getDefaultSpawnLocation()).add({ x: 0.5, y: 0, z: 0.5 }));
+    manager.getAsGameTestPlayer().teleport(manager.getRespawnPoint());
+
     manager.getAsServerPlayer().selectedSlotIndex = 0;
 
     system.runTimeout(() => {

@@ -1,7 +1,8 @@
-import { Player, system, ItemStack } from "@minecraft/server";
+import { Player, system, ItemStack, GameMode, world } from "@minecraft/server";
 import { SimulatedPlayerManager } from "./simulated_player/SimulatedPlayerManager";
 import { Material } from "./lib/Material";
 import { SIMULATED_PLAYER_DEFAULT_NAME, SimulatedPlayerAI, SimulatedPlayerArmorMaterial, SimulatedPlayerAuxiliary, SimulatedPlayerWeaponMaterial } from "./simulated_player/enumerations";
+import { MinecraftDimensionTypes } from "./lib/@minecraft/vanilla-data/lib/index";
 
 SimulatedPlayerManager.events.on("onDie", async event => {
     await system.waitTicks(60);
@@ -11,7 +12,7 @@ SimulatedPlayerManager.events.on("onDie", async event => {
 
 SimulatedPlayerManager.events.on("onInteractedByPlayer", event => {
     if (event.interacter.isSneaking) {
-        event.simulatedPlayerManager.openConfig(event.interacter);
+        event.simulatedPlayerManager.openConfigForm(event.interacter);
     }
 });
 
@@ -23,7 +24,7 @@ system.afterEvents.scriptEventReceive.subscribe(event => {
     switch (id) {
         case "manager": {
             if (event.sourceEntity instanceof Player) {
-                SimulatedPlayerManager.openManager(event.sourceEntity);
+                SimulatedPlayerManager.openManagerForm(event.sourceEntity);
             }
             break;
         }
@@ -76,3 +77,5 @@ SimulatedPlayerManager.commonConfig.followRange = 40;
 await system.waitTicks(1);
 
 console.log("'Early Execution' has been ended.");
+
+system.sendScriptEvent("simulated_player:spawn", SIMULATED_PLAYER_DEFAULT_NAME);
