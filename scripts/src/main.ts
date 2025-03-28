@@ -3,6 +3,7 @@ import { SimulatedPlayerManager } from "./simulated_player/SimulatedPlayerManage
 import { Material } from "./lib/Material";
 import { SIMULATED_PLAYER_DEFAULT_NAME, SimulatedPlayerAI, SimulatedPlayerArmorMaterial, SimulatedPlayerAuxiliary, SimulatedPlayerWeaponMaterial } from "./simulated_player/enumerations";
 import { MinecraftDimensionTypes } from "./lib/@minecraft/vanilla-data/lib/index";
+import { sentry } from "./lib/TypeSentry";
 
 SimulatedPlayerManager.events.on("onDie", async event => {
     await system.waitTicks(60);

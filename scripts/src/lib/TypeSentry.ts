@@ -1,4 +1,4 @@
-export abstract class Type<T> {
+export abstract class TypeModel<T> {
     public constructor() {}
 
     public abstract test(x: unknown): x is T;
@@ -13,7 +13,7 @@ export abstract class Type<T> {
     }
 }
 
-abstract class PrimitiveType<T extends boolean | number | bigint | string | null | undefined> extends Type<T> {
+abstract class PrimitiveModel<T extends boolean | number | bigint | string | null | undefined> extends TypeModel<T> {
     protected constructor() {
         super();
     }
@@ -28,52 +28,56 @@ abstract class PrimitiveType<T extends boolean | number | bigint | string | null
     }
 }
 
-class BooleanType extends PrimitiveType<boolean> {
+class BooleanModel extends PrimitiveModel<boolean> {
     public override test(x: unknown): x is boolean {
         return typeof x === "boolean";
     }
 
-    public static readonly INSTANCE: BooleanType = new this();
+    public static readonly INSTANCE: BooleanModel = new this();
 }
 
-class NumberType extends PrimitiveType<number> {
+class NumberModel extends PrimitiveModel<number> {
     public override test(x: unknown): x is number {
         return typeof x === "number";
     }
 
-    public nonNaN(): NumberType {
-        return new (class extends NumberType {
+    public nonNaN(): NumberModel {
+        const that = this;
+
+        return new (class extends NumberModel {
             public test(x: unknown): x is number {
-                return super.test(x) && !Number.isNaN(x);
+                return that.test(x) && !Number.isNaN(x);
             }
         })();
     }
 
-    public static readonly INSTANCE: NumberType = new this();
+    public static readonly INSTANCE: NumberModel = new this();
 }
 
-class IntType extends NumberType {
+class IntModel extends NumberModel {
     public test(x: unknown): x is number {
         return super.test(x) && Number.isInteger(x);
     }
 
-    public nonNaN(): IntType {
-        return new (class extends IntType {
+    public nonNaN(): IntModel {
+        const that = this;
+
+        return new (class extends IntModel {
             public test(x: unknown): x is number {
-                return super.test(x) && !Number.isNaN(x);
+                return that.test(x) && !Number.isNaN(x);
             }
         })();
     }
 
-    public static readonly INSTANCE: IntType = new this();
+    public static readonly INSTANCE: IntModel = new this();
 }
 
-class BigIntType extends PrimitiveType<bigint> {
+class BigIntModel extends PrimitiveModel<bigint> {
     public override test(x: unknown): x is bigint {
         return typeof x === "bigint";
     }
 
-    public static readonly INSTANCE: BigIntType = new this();
+    public static readonly INSTANCE: BigIntModel = new this();
 }
 
 interface LengthRange {
@@ -82,12 +86,12 @@ interface LengthRange {
     readonly max?: number;
 };
 
-class StringType extends PrimitiveType<string> {
+class StringModel extends PrimitiveModel<string> {
     public override test(x: unknown): x is string {
         return typeof x === "string";
     }
 
-    public lengthLimited(range: LengthRange): StringType {
+    public withLength(range: LengthRange): StringModel {
         const min = range.min === undefined ? 0 : range.min;
         const max = range.max === undefined ? Infinity : range.max;
 
@@ -95,33 +99,45 @@ class StringType extends PrimitiveType<string> {
             throw TypeError("無効な範囲です");
         }
 
-        return new (class extends StringType {
+        const that = this;
+
+        return new (class extends StringModel {
             public test(x: unknown): x is string {
-                return super.test(x) && (min <= x.length && x.length <= max);
+                return that.test(x) && (min <= x.length && x.length <= max);
             }
         })();
     }
 
-    public static readonly INSTANCE: StringType = new this();
+    public withPattern(pattern: RegExp): StringModel {
+        const that = this;
+
+        return new (class extends StringModel {
+            public test(x: unknown): x is string {
+                return that.test(x) && new RegExp(pattern).test(x);
+            }
+        })();
+    }
+
+    public static readonly INSTANCE: StringModel = new this();
 }
 
-class NullType extends PrimitiveType<null> {
+class NullModel extends PrimitiveModel<null> {
     public override test(x: unknown): x is null {
         return x === null;
     }
 
-    public static readonly INSTANCE: NullType = new this();
+    public static readonly INSTANCE: NullModel = new this();
 }
 
-class UndefinedType extends PrimitiveType<undefined> {
+class UndefinedModel extends PrimitiveModel<undefined> {
     public override test(x: unknown): x is undefined {
         return x === undefined;
     }
 
-    public static readonly INSTANCE: UndefinedType = new this();
+    public static readonly INSTANCE: UndefinedModel = new this();
 }
 
-class AnyType extends Type<any> {
+class AnyModel extends TypeModel<any> {
     private constructor() {
         super();
     }
@@ -130,30 +146,30 @@ class AnyType extends Type<any> {
         return true;
     }
 
-    public static readonly INSTANCE: AnyType = new this();
+    public static readonly INSTANCE: AnyModel = new this();
 }
 
-class NeverType extends Type<never> {
+class NeverModel extends TypeModel<never> {
     public test(x: unknown): x is never {
         return false;
     }
 
-    public static readonly INSTANCE: NeverType = new this();
+    public static readonly INSTANCE: NeverModel = new this();
 }
 
-class VoidType extends Type<void> {
+class VoidModel extends TypeModel<void> {
     public test(x: unknown): x is void {
         return x === undefined;
     }
 
-    public static readonly INSTANCE: VoidType = new this();
+    public static readonly INSTANCE: VoidModel = new this();
 }
 
 type ExtractTypeInObjectValue<T> = {
-    [K in keyof T]: T[K] extends Type<infer U> ? U : never;
+    [K in keyof T]: T[K] extends TypeModel<infer U> ? U : never;
 };
 
-class ObjectType<T> extends Type<T> {
+class ObjectModel<T> extends TypeModel<T> {
     private readonly object: T;
 
     protected constructor(object: T) {
@@ -165,8 +181,7 @@ class ObjectType<T> extends Type<T> {
         if (typeof x !== "object") return false;
         if (x === null) return false;
 
-        for (const [key, type] of Object.entries(this.object as Record<string | number | symbol, Type<unknown>>)) {
-
+        for (const [key, type] of Object.entries(this.object as Record<string | number | symbol, TypeModel<unknown>>)) {
             const value: unknown = (x as Record<string | number | symbol, unknown>)[key];
             if (!type.test(value)) return false;
         }
@@ -174,10 +189,12 @@ class ObjectType<T> extends Type<T> {
         return true;
     }
 
-    public exact(): ObjectType<T> {
-        return new (class extends ObjectType<T> {
+    public exact(): ObjectModel<T> {
+        const that = this;
+
+        return new (class extends ObjectModel<T> {
             public test(x: unknown): x is T {
-                if (super.test(x)) {
+                if (that.test(x)) {
                     return Object.keys(x as object).length === Object.keys(this.object as object).length;
                 }
                 else return false;
@@ -185,15 +202,15 @@ class ObjectType<T> extends Type<T> {
         })(this.object);
     }
 
-    public static newInstance<U extends Record<string | number | symbol, Type<unknown>>>(object: U): ObjectType<ExtractTypeInObjectValue<U>> {
+    public static newInstance<U extends Record<string | number | symbol, TypeModel<unknown>>>(object: U): ObjectModel<ExtractTypeInObjectValue<U>> {
         return new this(object as ExtractTypeInObjectValue<U>);
     }
 }
 
-class ArrayType<T> extends Type<T[]> {
-    private readonly type: Type<T>;
+class ArrayModel<T> extends TypeModel<T[]> {
+    private readonly type: TypeModel<T>;
 
-    public constructor(type: Type<T>) {
+    public constructor(type: TypeModel<T>) {
         super();
         this.type = type;
     }
@@ -203,7 +220,7 @@ class ArrayType<T> extends Type<T[]> {
             && x.every(e => this.type.test(e));
     }
 
-    public lengthLimited(range: LengthRange): ArrayType<T> {
+    public withLength(range: LengthRange): ArrayModel<T> {
         const min = range.min === undefined ? 0 : range.min;
         const max = range.max === undefined ? Infinity : range.max;
 
@@ -211,15 +228,21 @@ class ArrayType<T> extends Type<T[]> {
             throw TypeError("無効な範囲です");
         }
 
-        return new (class extends ArrayType<T> {
+        const that = this;
+
+        return new (class extends ArrayModel<T> {
             public test(x: unknown): x is T[] {
-                return super.test(x) && (min <= x.length && x.length <= max);
+                return that.test(x) && (min <= x.length && x.length <= max);
             }
         })(this.type);
     }
+
+    public getModelOfElement(): TypeModel<T> {
+        return this.type;
+    }
 }
 
-class FunctionType extends Type<Function> {
+class FunctionModel extends TypeModel<Function> {
     private constructor() {
         super();
     }
@@ -228,53 +251,53 @@ class FunctionType extends Type<Function> {
         return typeof x === "function";
     }
 
-    public static readonly INSTANCE: FunctionType = new this();
+    public static readonly INSTANCE: FunctionModel = new this();
 }
 
-type ExtractTypes<U extends Type<unknown>[]> = U[number] extends Type<infer V> ? V : never;
+type ExtractTypes<U extends TypeModel<unknown>[]> = U[number] extends TypeModel<infer V> ? V : never;
 
-class UnionType<T> extends Type<T> {
-    private readonly types: Type<T>[];
+class UnionModel<T> extends TypeModel<T> {
+    private readonly types: TypeModel<T>[];
 
-    private constructor(...types: Type<unknown>[]) {
+    private constructor(...types: TypeModel<unknown>[]) {
         super();
-        this.types = types as Type<T>[];
+        this.types = types as TypeModel<T>[];
     }
 
     public override test(x: unknown): x is T {
         return this.types.some(type => type.test(x));
     }
 
-    public static newInstance<U extends Type<unknown>[]>(...types: U): UnionType<ExtractTypes<U>> {
+    public static newInstance<U extends TypeModel<unknown>[]>(...types: U): UnionModel<ExtractTypes<U>> {
         return new this(...types);
     }
 }
 
 type UnionToIntersection<U> = (U extends unknown ? (k: U) => void : never) extends ((k: infer I) => void) ? I : never;
 
-type ExtractIntersectTypes<T extends Type<unknown>[]> = UnionToIntersection<(T extends Type<infer U>[] ? U[] : never)[number]>;
+type ExtractIntersectTypes<T extends TypeModel<unknown>[]> = UnionToIntersection<(T extends TypeModel<infer U>[] ? U[] : never)[number]>;
 
-class IntersectionType<T> extends Type<T> {
-    private readonly types: Type<T>[];
+class IntersectionModel<T> extends TypeModel<T> {
+    private readonly types: TypeModel<T>[];
 
-    private constructor(...types: Type<unknown>[]) {
+    private constructor(...types: TypeModel<unknown>[]) {
         super();
-        this.types = types as Type<T>[];
+        this.types = types as TypeModel<T>[];
     }
 
     public override test(x: unknown): x is T {
         return this.types.some(type => type.test(x));
     }
 
-    public static newInstance<U extends Type<unknown>[]>(...types: U): IntersectionType<ExtractIntersectTypes<U>> {
+    public static newInstance<U extends TypeModel<unknown>[]>(...types: U): IntersectionModel<ExtractIntersectTypes<U>> {
         return new this(...types);
     }
 }
 
-class OptionalType<T> extends Type<T | undefined> {
-    private readonly type: Type<T>;
+class OptionalModel<T> extends TypeModel<T | undefined> {
+    private readonly type: TypeModel<T>;
 
-    private constructor(type: Type<T>) {
+    private constructor(type: TypeModel<T>) {
         super();
         this.type = type;
     }
@@ -284,17 +307,43 @@ class OptionalType<T> extends Type<T | undefined> {
             || sentry.undefined.test(x);
     }
 
-    public static newInstance<U>(type: Type<U>): OptionalType<U> {
+    public unwrap(): TypeModel<T> {
+        return this.type;
+    }
+
+    public static newInstance<U>(type: TypeModel<U>): OptionalModel<U> {
         return new this(type);
     }
 }
 
-class MapType<K, V> extends Type<Map<K, V>> {
-    private readonly keyType: Type<K>;
+class NullableModel<T> extends TypeModel<T | null> {
+    private readonly type: TypeModel<T>;
 
-    private readonly valueType: Type<V>;
+    private constructor(type: TypeModel<T>) {
+        super();
+        this.type = type;
+    }
 
-    public constructor(keyType: Type<K>, valueType: Type<V>) {
+    public override test(x: unknown): x is (T | null) {
+        return this.type.test(x)
+            || sentry.null.test(x);
+    }
+
+    public unwrap(): TypeModel<T> {
+        return this.type;
+    }
+
+    public static newInstance<U>(type: TypeModel<U>): NullableModel<U> {
+        return new this(type);
+    }
+}
+
+class MapModel<K, V> extends TypeModel<Map<K, V>> {
+    private readonly keyType: TypeModel<K>;
+
+    private readonly valueType: TypeModel<V>;
+
+    public constructor(keyType: TypeModel<K>, valueType: TypeModel<V>) {
         super();
         this.keyType = keyType;
         this.valueType = valueType;
@@ -309,12 +358,20 @@ class MapType<K, V> extends Type<Map<K, V>> {
 
         return true;
     }
+
+    public getModelOfKey(): TypeModel<K> {
+        return this.keyType;
+    }
+
+    public getModelOfValue(): TypeModel<V> {
+        return this.valueType;
+    }
 }
 
-class SetType<T> extends Type<Set<T>> {
-    private readonly valueType: Type<T>;
+class SetModel<T> extends TypeModel<Set<T>> {
+    private readonly valueType: TypeModel<T>;
 
-    public constructor(valueType: Type<T>) {
+    public constructor(valueType: TypeModel<T>) {
         super();
         this.valueType = valueType;
     }
@@ -327,9 +384,13 @@ class SetType<T> extends Type<Set<T>> {
 
         return true;
     }
+
+    public getModelOfElement(): TypeModel<T> {
+        return this.valueType;
+    }
 }
 
-class ClassType<T> extends Type<T> {
+class ClassModel<T> extends TypeModel<T> {
     private constructor(private readonly constructorObject: Function) {
         super();
     }
@@ -338,8 +399,55 @@ class ClassType<T> extends Type<T> {
         return x instanceof this.constructorObject;
     }
 
-    public static newInstance<U extends Function>(constructor: U): ClassType<U["prototype"]> {
+    public static newInstance<U extends Function>(constructor: U): ClassModel<U["prototype"]> {
         return new this(constructor);
+    }
+}
+
+type TypeModelArrayToTuple<T extends TypeModel<unknown>[]> = { [K in keyof T]: T[K] extends TypeModel<infer U> ? U : never }
+
+class TupleModel<T extends TypeModel<unknown>[]> extends TypeModel<TypeModelArrayToTuple<T>> {
+    private readonly tuple: T;
+
+    private constructor(tuple: T) {
+        super();
+        this.tuple = tuple;
+    }
+
+    public override test(x: unknown): x is TypeModelArrayToTuple<T> {
+        if (!Array.isArray(x)) return false;
+        else if (x.length !== this.tuple.length) return false;
+        
+        for (const [index, model] of this.tuple.entries()) {
+            if (!model.test(x[index])) return false;
+        }
+
+        return true;
+    }
+
+    public static newInstance<T extends TypeModel<unknown>[]>(...elements: T): TupleModel<T> {
+        return new this(elements);
+    }
+}
+
+class LiteralModel<T extends boolean | number | bigint | string | null | undefined> extends PrimitiveModel<T> {
+    private readonly value: T;
+
+    public constructor(value: T) {
+        super();
+        this.value = value;
+    }
+
+    public override test(x: unknown): x is T {
+        return x === this.value;
+    }
+
+    public getLiteralValue(): T {
+        return this.value;
+    }
+
+    public static newInstance<U extends boolean | number | bigint | string | null | undefined>(string: U): LiteralModel<U> {
+        return new this(string);
     }
 }
 
@@ -354,58 +462,70 @@ const INTERNAL_CONSTRUCTOR_KEY = Symbol();
 export class TypeSentry {
     protected constructor(key: typeof INTERNAL_CONSTRUCTOR_KEY) {}
 
-    public readonly boolean: BooleanType = BooleanType.INSTANCE;
+    public readonly boolean: BooleanModel = BooleanModel.INSTANCE;
 
-    public readonly number: NumberType = NumberType.INSTANCE;
+    public readonly number: NumberModel = NumberModel.INSTANCE;
 
-    public readonly bigint: BigIntType = BigIntType.INSTANCE;
+    public readonly bigint: BigIntModel = BigIntModel.INSTANCE;
 
-    public readonly string: StringType = StringType.INSTANCE;
+    public readonly string: StringModel = StringModel.INSTANCE;
 
-    public readonly null: NullType = NullType.INSTANCE;
+    public readonly null: NullModel = NullModel.INSTANCE;
 
-    public readonly undefined: UndefinedType = UndefinedType.INSTANCE;
+    public readonly undefined: UndefinedModel = UndefinedModel.INSTANCE;
 
-    public readonly any: AnyType = AnyType.INSTANCE;
+    public readonly any: AnyModel = AnyModel.INSTANCE;
 
-    public readonly never: NeverType = NeverType.INSTANCE;
+    public readonly never: NeverModel = NeverModel.INSTANCE;
 
-    public readonly void: VoidType = VoidType.INSTANCE;
+    public readonly void: VoidModel = VoidModel.INSTANCE;
 
-    public readonly function: FunctionType = FunctionType.INSTANCE;
+    public readonly function: FunctionModel = FunctionModel.INSTANCE;
 
-    public readonly int: IntType = IntType.INSTANCE;
+    public readonly int: IntModel = IntModel.INSTANCE;
 
-    public objectOf<U extends Record<string | number | symbol, Type<unknown>>>(object: U): ObjectType<ExtractTypeInObjectValue<U>> {
-        return ObjectType.newInstance(object);
+    public objectOf<U extends Record<string | number | symbol, TypeModel<unknown>>>(object: U): ObjectModel<ExtractTypeInObjectValue<U>> {
+        return ObjectModel.newInstance(object);
     }
 
-    public arrayOf<U>(type: Type<U>): ArrayType<U> {
-        return new ArrayType(type);
+    public arrayOf<U>(type: TypeModel<U>): ArrayModel<U> {
+        return new ArrayModel(type);
     }
 
-    public mapOf<K, V>(keyType: Type<K>, valueType: Type<V>): MapType<K, V> {
-        return new MapType(keyType, valueType);
+    public mapOf<K, V>(keyType: TypeModel<K>, valueType: TypeModel<V>): MapModel<K, V> {
+        return new MapModel(keyType, valueType);
     }
 
-    public setOf<T>(valueType: Type<T>): SetType<T> {
-        return new SetType(valueType);
+    public setOf<T>(valueType: TypeModel<T>): SetModel<T> {
+        return new SetModel(valueType);
     }
 
-    public unionOf<U extends Type<unknown>[]>(...types: U): UnionType<ExtractTypes<U>> {
-        return UnionType.newInstance(...types);
+    public unionOf<U extends TypeModel<unknown>[]>(...types: U): UnionModel<ExtractTypes<U>> {
+        return UnionModel.newInstance(...types);
     }
 
-    public intersectionOf<U extends Type<unknown>[]>(...types: U): IntersectionType<ExtractIntersectTypes<U>> {
-        return IntersectionType.newInstance(...types);
+    public intersectionOf<U extends TypeModel<unknown>[]>(...types: U): IntersectionModel<ExtractIntersectTypes<U>> {
+        return IntersectionModel.newInstance(...types);
     }
 
-    public optionalOf<U>(type: Type<U>): OptionalType<U> {
-        return OptionalType.newInstance(type);
+    public optionalOf<U>(type: TypeModel<U>): OptionalModel<U> {
+        return OptionalModel.newInstance(type);
     }
 
-    public classOf<U extends Function>(constructor: U): ClassType<U["prototype"]> {
-        return ClassType.newInstance(constructor);
+    public nullableOf<U>(type: TypeModel<U>): NullableModel<U> {
+        return NullableModel.newInstance(type);
+    }
+
+    public classOf<U extends Function>(constructor: U): ClassModel<U["prototype"]> {
+        return ClassModel.newInstance(constructor);
+    }
+
+    public tupleOf<U extends TypeModel<unknown>[]>(...elements: U): TupleModel<U> {
+        return TupleModel.newInstance(...elements);
+    }
+
+    public literalOf<U extends boolean | number | bigint | string | null | undefined>(literal: U) {
+        return LiteralModel.newInstance(literal);
     }
 }
 
