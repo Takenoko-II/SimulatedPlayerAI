@@ -13,6 +13,8 @@ interface TemporaryBlock {
 
     readonly dimensionId: string;
 
+    readonly blockId: string;
+
     seconds: number;
 }
 
@@ -27,7 +29,7 @@ system.runInterval(() => {
                 continue;
             }
 
-            if (block.permutation.type.id === SimulatedPlayerManager.commonConfig.block.material.getAsBlockType().id) {
+            if (block.permutation.type.id === info.blockId) {
                 if (info.seconds > 0) {
                     info.seconds--;
                 }
@@ -63,21 +65,22 @@ system.runInterval(() => {
 export class TemporaryBlockManager {
     private constructor() {}
 
-    public static tryPlace(block: Block, material: Material) {
-        if (!block.isValid || !material.isBlock) {
+    public static tryPlace(block: Block, config: TemporaryBlockPlacementConfig) {
+        if (!block.isValid || !config.material.isBlock) {
             throw new TypeError();
         }
 
         if (!block.isAir && !block.isLiquid) return;
 
-        block.setType(material.getAsBlockType());
+        block.setType(config.material.getAsBlockType());
     
         const temporaryBlocks: TemporaryBlock[] = JSON.parse((world.getDynamicProperty("simulated_player:temporary_blocks") ?? "[]") as string);
     
         temporaryBlocks.push({
             dimensionId: block.dimension.id,
             location: block.location,
-            seconds: SimulatedPlayerManager.commonConfig.block.lifespanSeconds
+            seconds: config.lifespanSeconds,
+            blockId: config.material.getAsBlockType().id
         });
     
         world.setDynamicProperty("simulated_player:temporary_blocks", JSON.stringify(temporaryBlocks));

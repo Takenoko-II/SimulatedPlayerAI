@@ -1,3 +1,6 @@
+import { CombatAIHandler, NoneAIHandler, SimulatedPlayerAIHandler } from "./AI";
+import { SimulatedPlayerManager } from "./SimulatedPlayerManager";
+
 export enum SimulatedPlayerArmorMaterial {
     NONE = "none",
     LEATHER = "leather",
@@ -24,9 +27,50 @@ export enum SimulatedPlayerAuxiliary {
     TOTEM = "totem_of_undying"
 }
 
-export enum SimulatedPlayerAI {
-    NONE = "none",
-    COMBAT = "combat"
+interface AIHandlerClassObject extends Function {
+    getOrCreateHandler(manager: SimulatedPlayerManager): SimulatedPlayerAIHandler;
+
+    readonly ID: string;
+
+    prototype: SimulatedPlayerAIHandler;
+}
+
+export class SimulatedPlayerAIHandlerRegistry {
+    private constructor() {}
+
+    private static readonly registry: Map<string, AIHandlerClassObject> = new Map();
+
+    public static getRegisteredIds(): string[] {
+        return [...this.registry.keys()];
+    }
+
+    public static getIdOfHandler(handler: SimulatedPlayerAIHandler): string {
+        for (const clazz of this.registry.values()) {
+            if (handler instanceof clazz) {
+                return clazz.ID;
+            }
+        }
+
+        throw new Error("NEVER HAPPENS?");
+    }
+
+    public static getOrCreateHandlerOf(id: string, manager: SimulatedPlayerManager): SimulatedPlayerAIHandler {
+        if (this.registry.has(id)) {
+            return this.registry.get(id)!.getOrCreateHandler(manager);
+        }
+        else {
+            throw new Error();
+        }
+    }
+
+    public static register(clazz: AIHandlerClassObject) {
+        if (this.registry.has(clazz.ID)) {
+            throw new Error();
+        }
+        else {
+            this.registry.set(clazz.ID, clazz);
+        }
+    }
 }
 
 export const ENEMIES_FOR_SIMULATED_PLAYER: string[] = [
