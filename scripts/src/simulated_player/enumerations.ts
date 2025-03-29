@@ -1,4 +1,4 @@
-import { CombatAIHandler, NoneAIHandler, SimulatedPlayerAIHandler } from "./AI";
+import { SimulatedPlayerAIHandler } from "./AI";
 import { SimulatedPlayerManager } from "./SimulatedPlayerManager";
 
 export enum SimulatedPlayerArmorMaterial {

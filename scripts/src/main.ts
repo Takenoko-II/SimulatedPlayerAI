@@ -89,7 +89,11 @@ class TestAIHandler extends SimulatedPlayerAIHandler {
     }
 
     public tick(): void {
-        if (system.currentTick % 20 === 0) this.manager.getAsGameTestPlayer().jump();
+        if (system.currentTick % 4 === 0) {
+            this.manager.getAsGameTestPlayer().stopMoving();
+            this.manager.getAsGameTestPlayer().isSprinting = false;
+            this.manager.getAsGameTestPlayer().isSneaking = !this.manager.getAsGameTestPlayer().isSneaking;
+        }
     }
 
     public static getOrCreateHandler(manager: SimulatedPlayerManager): TestAIHandler {

@@ -1,5 +1,5 @@
 import { ActionFormWrapper, MessageFormWrapper, ModalFormWrapper } from "../lib/UI-2.0";
-import { CombatAIHandler, NoneAIHandler } from "./AI";
+import { CombatAIHandler } from "./ai/CombatAIHandler";
 import { SimulatedPlayerAIHandlerRegistry, SIMULATED_PLAYER_DEFAULT_NAME, SimulatedPlayerArmorMaterial, SimulatedPlayerAuxiliary, SimulatedPlayerWeaponMaterial } from "./enumerations";
 import { SimulatedPlayerManager } from "./SimulatedPlayerManager";
 
