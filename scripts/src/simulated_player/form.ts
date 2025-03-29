@@ -66,7 +66,7 @@ export const FORM = {
                 SimulatedPlayerManager.requestSpawnPlayer({
                     name: event.getTextFieldInput("name")!,
                     onCreate(player, time) {
-                        player.setAIById(CombatAIHandler.ID);
+                        player.setAIHandlerById(CombatAIHandler.ID);
                         console.warn(player.getAsServerPlayer().name + " joined. (" + time + "ms)");
                     }
                 });
@@ -174,7 +174,7 @@ export const FORM = {
         .submitButton({
             name: { translate: "gui.submit" },
             on(event) {
-                manager.setAIById(event.getDropdownInput("ai")?.value.id!);
+                manager.setAIHandlerById(event.getDropdownInput("ai")?.value.id!);
                 manager.armor = armorMaterials.find(armor => armor === event.getDropdownInput("armor")?.value.id)!;
                 manager.weapon = weaponMaterials.find(weapon => weapon === event.getDropdownInput("weapon")?.value.id)!;
                 manager.auxiliary = auxiliaries.find(auxiliary => auxiliary === event.getDropdownInput("auxiliary")?.value.id)!;

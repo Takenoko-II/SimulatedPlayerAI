@@ -34,7 +34,7 @@ system.afterEvents.scriptEventReceive.subscribe(event => {
             SimulatedPlayerManager.requestSpawnPlayer({
                 name: event.message.length === 0 ? SIMULATED_PLAYER_DEFAULT_NAME : event.message,
                 onCreate(player) {
-                    player.setAIById(CombatAIHandler.ID);
+                    player.setAIHandlerById(CombatAIHandler.ID);
                     player.weapon = SimulatedPlayerWeaponMaterial.WOODEN;
                     player.armor = SimulatedPlayerArmorMaterial.LEATHER;
                     player.canUseEnderPearl = true;
@@ -56,7 +56,7 @@ system.afterEvents.scriptEventReceive.subscribe(event => {
                 SimulatedPlayerManager.requestSpawnPlayer({
                     name: "Player(" + (i + 1) + ")",
                     onCreate(player, time) {
-                        player.setAIById(CombatAIHandler.ID);
+                        player.setAIHandlerById(CombatAIHandler.ID);
                         player.weapon = SimulatedPlayerWeaponMaterial.DIAMOND;
                         player.armor = SimulatedPlayerArmorMaterial.DIAMOND;
                         // (player.ai as CombatAIHandler).config.followRange = 40;
@@ -68,20 +68,6 @@ system.afterEvents.scriptEventReceive.subscribe(event => {
         }
     }
 });
-
-await system.waitTicks(1);
-
-console.log("'Early Execution' has been ended.");
-
-system.sendScriptEvent("simulated_player:spawn", SIMULATED_PLAYER_DEFAULT_NAME);
-
-SimulatedPlayerManager.requestSpawnPlayer({
-    name: "Foo",
-    onCreate(manager) {
-        manager.setAIById(CombatAIHandler.ID);
-        (manager.getAIHandler() as CombatAIHandler).config.block.material = Material.DIAMOND_BLOCK;
-    }
-})
 
 class TestAIHandler extends SimulatedPlayerAIHandler {
     private constructor(m: SimulatedPlayerManager) {
@@ -104,3 +90,14 @@ class TestAIHandler extends SimulatedPlayerAIHandler {
 }
 
 SimulatedPlayerAIHandlerRegistry.register(TestAIHandler);
+
+await system.waitTicks(1);
+
+console.log("'Early Execution' has been ended.");
+
+// Steveを召喚
+system.sendScriptEvent("simulated_player:spawn", SIMULATED_PLAYER_DEFAULT_NAME);
+
+SimulatedPlayerManager.getManagers().forEach(player => {
+    CombatAIHandler.getOrCreateHandler(player).config.followRange = 100;
+});

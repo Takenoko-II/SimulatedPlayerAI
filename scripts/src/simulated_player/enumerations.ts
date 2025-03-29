@@ -59,13 +59,13 @@ export class SimulatedPlayerAIHandlerRegistry {
             return this.registry.get(id)!.getOrCreateHandler(manager);
         }
         else {
-            throw new Error();
+            throw new Error("無効なIDです");
         }
     }
 
     public static register(clazz: AIHandlerClassObject) {
         if (this.registry.has(clazz.ID)) {
-            throw new Error();
+            throw new Error("既に登録済みのIDです");
         }
         else {
             this.registry.set(clazz.ID, clazz);

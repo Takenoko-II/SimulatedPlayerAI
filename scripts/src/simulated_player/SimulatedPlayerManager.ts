@@ -142,7 +142,7 @@ export class SimulatedPlayerManager {
         return this.__ai__;
     }
 
-    public setAIById(id: string): void {
+    public setAIHandlerById(id: string): void {
         this.__ai__ = SimulatedPlayerAIHandlerRegistry.getOrCreateHandlerOf(id, this);
     }
 
