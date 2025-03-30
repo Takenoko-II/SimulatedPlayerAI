@@ -82,11 +82,15 @@ export class SimulatedPlayerEventHandlerRegistry<T extends keyof SimulatedPlayer
     private readonly __handlers__: Map<number, (event: SimulatedPlayerEventTypes[T]) => void> = new Map();
 
     private constructor(event: T) {
+        if ([...SimulatedPlayerEventHandlerRegistry.__registries__.values()].some(r => r.__name__ === event)) {
+            throw new TypeError("既にその名前のレジストリは作成されています");
+        }
+
         this.__name__ = event;
         SimulatedPlayerEventHandlerRegistry.__registries__.add(this as unknown as RegistryUnion);
     }
 
-    public add(listener: (event: SimulatedPlayerEventTypes[T]) => void): number {
+    public registerCallback(listener: (event: SimulatedPlayerEventTypes[T]) => void): number {
         const id = SimulatedPlayerEventHandlerRegistry.__eventHandlerMaxId__++;
         this.__handlers__.set(id, listener);
         return id;
@@ -112,7 +116,7 @@ export class SimulatedPlayerEventHandlerRegistry<T extends keyof SimulatedPlayer
         throw new TypeError("無効なイベント名です");
     }
 
-    public static remove(id: number): void {
+    public static unregisterCallback(id: number): void {
         for (const registry of this.__registries__) {
             if (registry.__handlers__.has(id)) {
                 registry.__handlers__.delete(id);
@@ -121,17 +125,17 @@ export class SimulatedPlayerEventHandlerRegistry<T extends keyof SimulatedPlayer
         }
     }
 
-    public static readonly onHealthChange = new this("onHealthChange");
+    private static readonly onHealthChange = new this("onHealthChange");
 
-    public static readonly onDie = new this("onDie");
+    private static readonly onDie = new this("onDie");
 
-    public static readonly onSpawn = new this("onSpawn");
+    private static readonly onSpawn = new this("onSpawn");
 
-    public static readonly onHurt = new this("onHurt");
+    private static readonly onHurt = new this("onHurt");
 
-    public static readonly onPlaceBlock = new this("onPlaceBlock");
+    private static readonly onPlaceBlock = new this("onPlaceBlock");
 
-    public static readonly onAttack = new this("onAttack");
+    private static readonly onAttack = new this("onAttack");
 
-    public static readonly onInteractedByPlayer = new this("onInteractedByPlayer");
+    private static readonly onInteractedByPlayer = new this("onInteractedByPlayer");
 }

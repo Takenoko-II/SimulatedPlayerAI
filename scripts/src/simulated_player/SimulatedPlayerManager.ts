@@ -428,11 +428,11 @@ export class SimulatedPlayerManager {
      */
     public static readonly events: SimulatedPlayerEventHandlerRegistrar = {
         on(event, listener) {
-            return SimulatedPlayerEventHandlerRegistry.get(event).add(listener);
+            return SimulatedPlayerEventHandlerRegistry.get(event).registerCallback(listener);
         },
 
         off(id) {
-            SimulatedPlayerEventHandlerRegistry.remove(id);
+            SimulatedPlayerEventHandlerRegistry.unregisterCallback(id);
         }
     };
 

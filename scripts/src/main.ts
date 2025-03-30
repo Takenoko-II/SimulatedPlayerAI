@@ -1,13 +1,10 @@
-import { Player, system, ItemStack, world, EntityComponentTypes, EquipmentSlot, Direction } from "@minecraft/server";
+import { Player, system, ItemStack } from "@minecraft/server";
 import { SimulatedPlayerManager } from "./simulated_player/SimulatedPlayerManager";
 import { Material } from "./lib/Material";
 import { SIMULATED_PLAYER_DEFAULT_NAME, SimulatedPlayerAIHandlerRegistry, SimulatedPlayerArmorMaterial, SimulatedPlayerAuxiliary, SimulatedPlayerWeaponMaterial } from "./simulated_player/enumerations";
-import { MinecraftDimensionTypes } from "./lib/@minecraft/vanilla-data/lib/index";
 import { CombatAIHandler} from "./simulated_player/ai/CombatAIHandler";
 import { SimulatedPlayerAIHandler } from "./simulated_player/AI";
-import { NoneAIHandler } from "./simulated_player/ai/NoneAIHandler";
 import { TemporaryBlockManager } from "./simulated_player/TemporaryBlock";
-import { Vector3Builder } from "./util/Vector";
 
 SimulatedPlayerManager.events.on("onDie", async event => {
     await system.waitTicks(60);
@@ -54,8 +51,16 @@ system.afterEvents.scriptEventReceive.subscribe(event => {
             break;
         }
         case "chaos": {
+            if (!/\d+/g.test(event.message)) {
+                throw new Error("not an int");
+            }
+
+            const x = Number(event.message);
+
+            if (x > 50) throw new Error("too large number");
+
             SimulatedPlayerManager.getManagers().forEach(manager => manager.getAsGameTestPlayer().disconnect());
-            for (let i = 0; i < 8; i++) {
+            for (let i = 0; i < x; i++) {
                 SimulatedPlayerManager.requestSpawnPlayer({
                     name: "Player(" + (i + 1) + ")",
                     onCreate(player, time) {
@@ -67,6 +72,10 @@ system.afterEvents.scriptEventReceive.subscribe(event => {
                     }
                 });
             }
+            break;
+        }
+        case "blocks": {
+            console.log("blocks: " + JSON.stringify(TemporaryBlockManager.getAllBlocks(), undefined, 2));
             break;
         }
     }

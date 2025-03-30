@@ -10,43 +10,19 @@ export interface TemporaryBlockPlacementConfig {
 }
 
 interface TemporaryBlock {
-    readonly location: Vector3;
+    readonly pos: Vector3;
 
-    readonly dimensionId: string;
+    readonly dim: string;
 
-    readonly blockId: string;
+    readonly type: string;
 
-    seconds: number;
+    sec: number;
 }
 
 console.log("TEMPORARY");
 
 system.runInterval(() => {
-    const blocks = TemporaryBlockManager.getAllBlocks();
-    for (const info of blocks) {
-        try {
-            const block = world.getDimension(info.dimensionId).getBlock(info.location);
-
-            if (block === undefined) {
-                continue;
-            }
-
-            if (info.seconds > 0) {
-                TemporaryBlockManager.advanceClock(block, 1);
-            }
-            else {
-                TemporaryBlockManager.tryDestroy(block);
-            }
-        }
-        catch (e) {
-            if (e instanceof UnloadedChunksError || e instanceof LocationOutOfWorldBoundariesError) {
-                continue;
-            }
-            else {
-                throw e;
-            }
-        }
-    }
+    TemporaryBlockManager.advanceClock(1);
 }, 20);
 
 export class TemporaryBlockManager {
@@ -59,31 +35,40 @@ export class TemporaryBlockManager {
     }
 
     public static isTemporaryBlock(block: Block): boolean {
-        return this.getAllBlocks().some(({ dimensionId, location }) => dimensionId === block.dimension.id && Vector3Builder.from(location).equals(block.location));
+        return this.getAllBlocks().some(({ dim: dimensionId, pos: location }) => dimensionId === block.dimension.id && Vector3Builder.from(location).equals(block.location));
     }
 
-    public static advanceClock(block: Block, seconds: number): void {
+    public static advanceClock(seconds: number): void {
         const tBlocks = this.getAllBlocks();
-        
+
+        const destroyed: Block[] = [];
+
         for (const tBlock of tBlocks) {
-            if (tBlock.dimensionId === block.dimension.id && Vector3Builder.from(tBlock.location).equals(tBlock.location)) {
-                tBlock.seconds -= seconds;
-                break;
+            const block = world.getDimension(tBlock.dim).getBlock(tBlock.pos);
+            if (block?.isValid) {
+                tBlock.sec -= seconds;
+                if (tBlock.sec <= 0) {
+                    destroyed.push(block);
+                }
             }
         }
 
         world.setDynamicProperty(this.DYNAMIC_PROPERTY_ID, JSON.stringify(tBlocks));
+
+        for (const d of destroyed) {
+            this.tryDestroy(d);
+        }
     }
 
     public static tryDestroy(block: Block): void {
         const temporaryBlocks = this.getAllBlocks();
-        const temporaryBlock = temporaryBlocks.find(({ dimensionId, location }) => dimensionId === block.dimension.id && Vector3Builder.from(location).equals(block.location));
+        const temporaryBlock = temporaryBlocks.find(({ dim: dimensionId, pos: location }) => dimensionId === block.dimension.id && Vector3Builder.from(location).equals(block.location));
 
         if (temporaryBlock === undefined) {
             return;
         }
 
-        if (temporaryBlock.blockId === block.type.id) {
+        if (temporaryBlock.type === block.type.id) {
             const { x, y, z } = block.location;
             const items = block.dimension.getEntities({ type: "minecraft:item" });
             block.dimension.runCommand(`setblock ${x} ${y} ${z} air destroy`);
@@ -102,18 +87,24 @@ export class TemporaryBlockManager {
 
         if (!block.isAir && !block.isLiquid) return;
 
-        block.setType(config.material.getAsBlockType());
-
         const temporaryBlocks: TemporaryBlock[] = this.getAllBlocks();
 
         temporaryBlocks.push({
-            dimensionId: block.dimension.id,
-            location: block.location,
-            seconds: config.lifespanSeconds,
-            blockId: config.material.getAsBlockType().id
+            dim: block.dimension.id,
+            pos: block.location,
+            sec: config.lifespanSeconds,
+            type: config.material.getAsBlockType().id
         });
 
-        world.setDynamicProperty(this.DYNAMIC_PROPERTY_ID, JSON.stringify(temporaryBlocks));
+        const string = JSON.stringify(temporaryBlocks);
+
+        if (string.length > 32767) {
+            throw new Error("Cannot place a new temporary block: Maximum size of dynamic property exceeded");
+        }
+
+        world.setDynamicProperty(this.DYNAMIC_PROPERTY_ID, string);
+
+        block.setType(config.material.getAsBlockType());
     }
 }
 

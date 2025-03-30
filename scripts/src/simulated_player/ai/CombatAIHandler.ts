@@ -116,9 +116,11 @@ export class CombatAIHandler extends SimulatedPlayerAIHandler {
         const rayCastResultFeet = serverPlayer.dimension.getBlockFromRay(serverPlayer.location, direction, { maxDistance: dist + 1 });
         const rayCastResultEyes = serverPlayer.dimension.getBlockFromRay(serverPlayer.getHeadLocation(), direction, { maxDistance: dist + 1 });
 
-        if (this.behaviorState.fallingTicks > 1 && (rayCastResultEyes === undefined || rayCastResultFeet === undefined)) {
+        if (this.behaviorState.fallingTicks === 2 && (rayCastResultEyes === undefined || rayCastResultFeet === undefined)) {
             serverPlayer.selectedSlotIndex = 0;
-            const r = this.manager.getAsGameTestPlayer().attackEntity(target);
+
+            const r = this.manager.getAsGameTestPlayer().attackEntity(target)
+
             if (r) {
                 this.behaviorState.directionToMoveAround = RandomHandler.choice(["LEFT", "RIGHT"]);
                 this.behaviorState.distanceError = RandomHandler.choice([-1.0, -0.8, -0.6, -0.4, -0.2, 0.0, 0.2, 0.4, 0.6, 0.8, 1.0]);
@@ -154,14 +156,14 @@ export class CombatAIHandler extends SimulatedPlayerAIHandler {
             this.behaviorState.preparingForAttack = true;
             system.runTimeout(() => {
                 if (!player.isValid) return;
-                // ジャンプしてスニークしてhandled = false;
+                // ジャンプしてスニーク解除してhandled = false;
                 player.jump();
                 player.isSneaking = false;
                 this.behaviorState.preparingForAttack = false;
             }, 10);
         }
 
-        if (entities.length > 0 && distance < (5 + this.behaviorState.distanceError)) {
+        if (entities.length > 0 && distance <= 5) {
             this.tryAttack(target);
         }
 
