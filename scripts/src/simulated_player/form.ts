@@ -66,7 +66,7 @@ export const FORM = {
                 SimulatedPlayerManager.requestSpawnPlayer({
                     name: event.getTextFieldInput("name")!,
                     onCreate(player, time) {
-                        player.setAIHandlerById(CombatAIHandler.ID);
+                        player.setAIHandler(CombatAIHandler.ID);
                         console.warn(player.getAsServerPlayer().name + " joined. (" + time + "ms)");
                     }
                 });
@@ -139,25 +139,25 @@ export const FORM = {
     },
 
     config(manager: SimulatedPlayerManager): ModalFormWrapper {
-        const armorMaterials = Object.values(SimulatedPlayerArmorMaterial);
-        const weaponMaterials = Object.values(SimulatedPlayerWeaponMaterial);
+        const armors = Object.values(SimulatedPlayerArmorMaterial);
+        const weapons = Object.values(SimulatedPlayerWeaponMaterial);
         const auxiliaries = Object.values(SimulatedPlayerAuxiliary);
 
-        const aiTypes = SimulatedPlayerAIHandlerRegistry.getRegisteredIds();
+        const aiTypes = SimulatedPlayerAIHandlerRegistry.getAllHandlerIds();
 
         return new ModalFormWrapper()
         .title("Simulated Player Config")
         .dropdown({
             id: "armor",
             label: "防具",
-            list: armorMaterials.map(v => ({ id: v, text: v })),
-            defaultValueIndex: armorMaterials.indexOf(manager.armor)
+            list: armors.map(v => ({ id: v, text: v })),
+            defaultValueIndex: armors.indexOf(manager.armor)
         })
         .dropdown({
             id: "weapon",
             label: "近接武器",
-            list: weaponMaterials.map(v => ({ id: v, text: v })),
-            defaultValueIndex: weaponMaterials.indexOf(manager.weapon)
+            list: weapons.map(v => ({ id: v, text: v })),
+            defaultValueIndex: weapons.indexOf(manager.weapon)
         })
         .dropdown({
             id: "auxiliary",
@@ -169,14 +169,14 @@ export const FORM = {
             id: "ai",
             label: "AI",
             list: aiTypes.map(v => ({ id: v, text: v })),
-            defaultValueIndex: aiTypes.indexOf(SimulatedPlayerAIHandlerRegistry.getIdOfHandler(manager.getAIHandler()))
+            defaultValueIndex: aiTypes.indexOf(SimulatedPlayerAIHandlerRegistry.getIdByHandler(manager.getAIHandler()))
         })
         .submitButton({
             name: { translate: "gui.submit" },
             on(event) {
-                manager.setAIHandlerById(event.getDropdownInput("ai")?.value.id!);
-                manager.armor = armorMaterials.find(armor => armor === event.getDropdownInput("armor")?.value.id)!;
-                manager.weapon = weaponMaterials.find(weapon => weapon === event.getDropdownInput("weapon")?.value.id)!;
+                manager.setAIHandler(event.getDropdownInput("ai")?.value.id!);
+                manager.armor = armors.find(armor => armor === event.getDropdownInput("armor")?.value.id)!;
+                manager.weapon = weapons.find(weapon => weapon === event.getDropdownInput("weapon")?.value.id)!;
                 manager.auxiliary = auxiliaries.find(auxiliary => auxiliary === event.getDropdownInput("auxiliary")?.value.id)!;
             }
         });

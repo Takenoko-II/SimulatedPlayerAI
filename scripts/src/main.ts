@@ -1,10 +1,13 @@
-import { Player, system, ItemStack } from "@minecraft/server";
+import { Player, system, ItemStack, world, EntityComponentTypes, EquipmentSlot, Direction } from "@minecraft/server";
 import { SimulatedPlayerManager } from "./simulated_player/SimulatedPlayerManager";
 import { Material } from "./lib/Material";
 import { SIMULATED_PLAYER_DEFAULT_NAME, SimulatedPlayerAIHandlerRegistry, SimulatedPlayerArmorMaterial, SimulatedPlayerAuxiliary, SimulatedPlayerWeaponMaterial } from "./simulated_player/enumerations";
 import { MinecraftDimensionTypes } from "./lib/@minecraft/vanilla-data/lib/index";
 import { CombatAIHandler} from "./simulated_player/ai/CombatAIHandler";
 import { SimulatedPlayerAIHandler } from "./simulated_player/AI";
+import { NoneAIHandler } from "./simulated_player/ai/NoneAIHandler";
+import { TemporaryBlockManager } from "./simulated_player/TemporaryBlock";
+import { Vector3Builder } from "./util/Vector";
 
 SimulatedPlayerManager.events.on("onDie", async event => {
     await system.waitTicks(60);
@@ -14,7 +17,7 @@ SimulatedPlayerManager.events.on("onDie", async event => {
 
 SimulatedPlayerManager.events.on("onInteractedByPlayer", event => {
     if (event.interacter.isSneaking) {
-        event.simulatedPlayerManager.openConfigForm(event.interacter);
+        event.simulatedPlayerManager.openConfigUI(event.interacter);
     }
 });
 
@@ -26,7 +29,7 @@ system.afterEvents.scriptEventReceive.subscribe(event => {
     switch (id) {
         case "manager": {
             if (event.sourceEntity instanceof Player) {
-                SimulatedPlayerManager.openManagerForm(event.sourceEntity);
+                SimulatedPlayerManager.openManagerUI(event.sourceEntity);
             }
             break;
         }
@@ -34,7 +37,7 @@ system.afterEvents.scriptEventReceive.subscribe(event => {
             SimulatedPlayerManager.requestSpawnPlayer({
                 name: event.message.length === 0 ? SIMULATED_PLAYER_DEFAULT_NAME : event.message,
                 onCreate(player) {
-                    player.setAIHandlerById(CombatAIHandler.ID);
+                    player.setAIHandler(CombatAIHandler.ID);
                     player.weapon = SimulatedPlayerWeaponMaterial.WOODEN;
                     player.armor = SimulatedPlayerArmorMaterial.LEATHER;
                     player.canUseEnderPearl = true;
@@ -56,7 +59,7 @@ system.afterEvents.scriptEventReceive.subscribe(event => {
                 SimulatedPlayerManager.requestSpawnPlayer({
                     name: "Player(" + (i + 1) + ")",
                     onCreate(player, time) {
-                        player.setAIHandlerById(CombatAIHandler.ID);
+                        player.setAIHandler(CombatAIHandler.ID);
                         player.weapon = SimulatedPlayerWeaponMaterial.DIAMOND;
                         player.armor = SimulatedPlayerArmorMaterial.DIAMOND;
                         // (player.ai as CombatAIHandler).config.followRange = 40;
@@ -75,14 +78,14 @@ class TestAIHandler extends SimulatedPlayerAIHandler {
     }
 
     public tick(): void {
-        if (system.currentTick % 4 === 0) {
+        if (system.currentTick % 2 === 0) {
             this.manager.getAsGameTestPlayer().stopMoving();
             this.manager.getAsGameTestPlayer().isSprinting = false;
             this.manager.getAsGameTestPlayer().isSneaking = !this.manager.getAsGameTestPlayer().isSneaking;
         }
     }
 
-    public static getOrCreateHandler(manager: SimulatedPlayerManager): TestAIHandler {
+    public static get(manager: SimulatedPlayerManager): TestAIHandler {
         return SimulatedPlayerAIHandler.__getOrCreateHandler__(manager, TestAIHandler.ID, manager => new TestAIHandler(manager));
     }
 
@@ -97,7 +100,3 @@ console.log("'Early Execution' has been ended.");
 
 // Steveを召喚
 system.sendScriptEvent("simulated_player:spawn", SIMULATED_PLAYER_DEFAULT_NAME);
-
-SimulatedPlayerManager.getManagers().forEach(player => {
-    CombatAIHandler.getOrCreateHandler(player).config.followRange = 100;
-});

@@ -13,7 +13,7 @@ export abstract class TypeModel<T> {
     }
 }
 
-abstract class PrimitiveModel<T extends boolean | number | bigint | string | null | undefined> extends TypeModel<T> {
+abstract class PrimitiveModel<T extends boolean | number | bigint | string | symbol | null | undefined> extends TypeModel<T> {
     protected constructor() {
         super();
     }
@@ -24,7 +24,8 @@ abstract class PrimitiveModel<T extends boolean | number | bigint | string | nul
             || sentry.bigint.test(x)
             || sentry.string.test(x)
             || sentry.null.test(x)
-            || sentry.undefined.test(x);
+            || sentry.undefined.test(x)
+            || sentry.symbol.test(x);
     }
 }
 
@@ -254,6 +255,18 @@ class FunctionModel extends TypeModel<Function> {
     public static readonly INSTANCE: FunctionModel = new this();
 }
 
+class SymbolModel extends TypeModel<symbol> {
+    private constructor() {
+        super();
+    }
+
+    public test(x: unknown): x is symbol {
+        return typeof x === "symbol";
+    }
+
+    public static readonly INSTANCE: SymbolModel = new this();
+}
+
 type ExtractTypes<U extends TypeModel<unknown>[]> = U[number] extends TypeModel<infer V> ? V : never;
 
 class UnionModel<T> extends TypeModel<T> {
@@ -430,7 +443,7 @@ class TupleModel<T extends TypeModel<unknown>[]> extends TypeModel<TypeModelArra
     }
 }
 
-class LiteralModel<T extends boolean | number | bigint | string | null | undefined> extends PrimitiveModel<T> {
+class LiteralModel<T extends boolean | number | bigint | string | symbol> extends PrimitiveModel<T> {
     private readonly value: T;
 
     public constructor(value: T) {
@@ -446,7 +459,7 @@ class LiteralModel<T extends boolean | number | bigint | string | null | undefin
         return this.value;
     }
 
-    public static newInstance<U extends boolean | number | bigint | string | null | undefined>(string: U): LiteralModel<U> {
+    public static newInstance<U extends boolean | number | bigint | string | symbol>(string: U): LiteralModel<U> {
         return new this(string);
     }
 }
@@ -481,6 +494,8 @@ export class TypeSentry {
     public readonly void: VoidModel = VoidModel.INSTANCE;
 
     public readonly function: FunctionModel = FunctionModel.INSTANCE;
+
+    public readonly symbol: SymbolModel = SymbolModel.INSTANCE;
 
     public readonly int: IntModel = IntModel.INSTANCE;
 
@@ -524,7 +539,7 @@ export class TypeSentry {
         return TupleModel.newInstance(...elements);
     }
 
-    public literalOf<U extends boolean | number | bigint | string | null | undefined>(literal: U) {
+    public literalOf<U extends boolean | number | bigint | string | symbol>(literal: U) {
         return LiteralModel.newInstance(literal);
     }
 }

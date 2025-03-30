@@ -28,7 +28,7 @@ export enum SimulatedPlayerAuxiliary {
 }
 
 interface AIHandlerClassObject extends Function {
-    getOrCreateHandler(manager: SimulatedPlayerManager): SimulatedPlayerAIHandler;
+    get(manager: SimulatedPlayerManager): SimulatedPlayerAIHandler;
 
     readonly ID: string;
 
@@ -40,11 +40,11 @@ export class SimulatedPlayerAIHandlerRegistry {
 
     private static readonly registry: Map<string, AIHandlerClassObject> = new Map();
 
-    public static getRegisteredIds(): string[] {
+    public static getAllHandlerIds(): string[] {
         return [...this.registry.keys()];
     }
 
-    public static getIdOfHandler(handler: SimulatedPlayerAIHandler): string {
+    public static getIdByHandler(handler: SimulatedPlayerAIHandler): string {
         for (const clazz of this.registry.values()) {
             if (handler instanceof clazz) {
                 return clazz.ID;
@@ -54,9 +54,9 @@ export class SimulatedPlayerAIHandlerRegistry {
         throw new Error("NEVER HAPPENS?");
     }
 
-    public static getOrCreateHandlerOf(id: string, manager: SimulatedPlayerManager): SimulatedPlayerAIHandler {
+    public static getHandlerById(id: string, manager: SimulatedPlayerManager): SimulatedPlayerAIHandler {
         if (this.registry.has(id)) {
-            return this.registry.get(id)!.getOrCreateHandler(manager);
+            return this.registry.get(id)!.get(manager);
         }
         else {
             throw new Error("無効なIDです");
@@ -110,8 +110,8 @@ export const ENEMIES_FOR_SIMULATED_PLAYER: string[] = [
     "leash_knot",
     "llama_spit",
     "eye_of_ender_signal",
-    "armor_stand",
-    "wind_charge_projectile"
+    "wind_charge_projectile",
+    // "armor_stand"
 ];
 
 export const SIMULATED_PLAYER_COMMAND_TAG: string = "simulated_player:identifier";

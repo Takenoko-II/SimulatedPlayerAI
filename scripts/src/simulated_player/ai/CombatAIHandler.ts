@@ -16,6 +16,8 @@ interface CombatAIBehaviorState {
     directionToMoveAround: DirectionLeftRight;
 
     preparingForAttack: boolean;
+
+    distanceError: number;
 }
 
 interface CombatAIConfig {
@@ -34,11 +36,12 @@ export class CombatAIHandler extends SimulatedPlayerAIHandler {
     private readonly behaviorState: CombatAIBehaviorState = {
         fallingTicks: 0,
         directionToMoveAround: RandomHandler.choice(["LEFT", "RIGHT"]),
-        preparingForAttack: false
+        preparingForAttack: false,
+        distanceError: RandomHandler.choice([-1.0, -0.8, -0.6, -0.4, -0.2, 0.0, 0.2, 0.4, 0.6, 0.8, 1.0])
     };
 
     private readonly __config__: CombatAIConfig = {
-        followRange: 30,
+        followRange: 40,
         block: {
             lifespanSeconds: 3,
             material: Material.COBBLESTONE
@@ -118,6 +121,7 @@ export class CombatAIHandler extends SimulatedPlayerAIHandler {
             const r = this.manager.getAsGameTestPlayer().attackEntity(target);
             if (r) {
                 this.behaviorState.directionToMoveAround = RandomHandler.choice(["LEFT", "RIGHT"]);
+                this.behaviorState.distanceError = RandomHandler.choice([-1.0, -0.8, -0.6, -0.4, -0.2, 0.0, 0.2, 0.4, 0.6, 0.8, 1.0]);
             }
         }
     }
@@ -157,7 +161,7 @@ export class CombatAIHandler extends SimulatedPlayerAIHandler {
             }, 10);
         }
 
-        if (entities.length > 0 && distance < 5) {
+        if (entities.length > 0 && distance < (5 + this.behaviorState.distanceError)) {
             this.tryAttack(target);
         }
 
@@ -200,7 +204,8 @@ export class CombatAIHandler extends SimulatedPlayerAIHandler {
             .getLocalAxisProvider()
             .getX();
 
-            if (this.behaviorState.directionToMoveAround === "RIGHT") {
+            if (SimulatedPlayerManager.getById(target.id) === undefined && this.behaviorState.directionToMoveAround === "RIGHT") {
+                // targetがSimulatedPlayerでないときのみ
                 direction.invert();
             }
 
@@ -223,7 +228,6 @@ export class CombatAIHandler extends SimulatedPlayerAIHandler {
             if (target.location.y - location.y > 2) {
                 player.stopMoving();
                 if (system.currentTick % 10 === 0) {
-                    player.setRotation(Vector3Builder.from({ x: 0, y: -1, z: 0 }).getRotation2d());
                     player.setItem(new ItemStack(this.config.block.material.getAsItemType()), 3, true);
                     this.manager.pileUpBlock(this.config.block);
                 }
@@ -261,7 +265,7 @@ export class CombatAIHandler extends SimulatedPlayerAIHandler {
         }
     }
 
-    public static getOrCreateHandler(manager: SimulatedPlayerManager): CombatAIHandler {
+    public static get(manager: SimulatedPlayerManager): CombatAIHandler {
         const constructor = (manager: SimulatedPlayerManager) => new CombatAIHandler(manager);
         return SimulatedPlayerAIHandler.__getOrCreateHandler__(manager, CombatAIHandler.ID, constructor) as CombatAIHandler;
     }

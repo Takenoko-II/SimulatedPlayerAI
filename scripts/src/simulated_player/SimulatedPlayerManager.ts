@@ -1,7 +1,7 @@
 import { Block, EntityComponentTypes, EntityQueryOptions, EquipmentSlot, GameMode, ItemStack, Player, system, Vector3, world } from "@minecraft/server";
 import { register, SimulatedPlayer } from "@minecraft/server-gametest";
 import { MinecraftDimensionTypes, MinecraftEntityTypes } from "../lib/@minecraft/vanilla-data/lib/index";
-import { Vector3Builder } from "../util/Vector";
+import { TripleAxisRotationBuilder, Vector3Builder } from "../util/Vector";
 import { Material } from "../lib/Material";
 import { SimulatedPlayerEventHandlerRegistrar, SimulatedPlayerEventHandlerRegistry } from "./events";
 import { SIMULATED_PLAYER_COMMAND_TAG, SimulatedPlayerAIHandlerRegistry, SimulatedPlayerArmorMaterial, SimulatedPlayerAuxiliary, SimulatedPlayerWeaponMaterial } from "./enumerations";
@@ -92,7 +92,7 @@ export class SimulatedPlayerManager {
 
     private __canUseEnderPearl__: boolean = true;
 
-    private __ai__: SimulatedPlayerAIHandler = NoneAIHandler.getOrCreateHandler(this);
+    private __ai__: SimulatedPlayerAIHandler = NoneAIHandler.get(this);
 
     private __respawnPoint__: Vector3Builder = Vector3Builder.from(world.getDefaultSpawnLocation()).add({ x: 0.5, y: 0.5, z: 0.5 });
 
@@ -142,8 +142,8 @@ export class SimulatedPlayerManager {
         return this.__ai__;
     }
 
-    public setAIHandlerById(id: string): void {
-        this.__ai__ = SimulatedPlayerAIHandlerRegistry.getOrCreateHandlerOf(id, this);
+    public setAIHandler(id: string): void {
+        this.__ai__ = SimulatedPlayerAIHandlerRegistry.getHandlerById(id, this);
     }
 
     /**
@@ -298,7 +298,7 @@ export class SimulatedPlayerManager {
      * このインスタンスに対応するプレイヤーを編集するためのフォームを開く
      * @param player フォームを開くプレイヤー
      */
-    public openConfigForm(player: Player) {
+    public openConfigUI(player: Player) {
         if (!this.isValid()) {
             throw new Error();
         }
@@ -331,6 +331,7 @@ export class SimulatedPlayerManager {
         const block = this.getAsServerPlayer().dimension.getBlock(location)!;
     
         player.jump();
+        player.setRotation(Vector3Builder.down().getRotation2d());
     
         system.runTimeout(() => {
             if (!this.isValid()) return;
@@ -441,7 +442,7 @@ export class SimulatedPlayerManager {
      * このクラスをフォームとしてプレイヤーに表示する関数
      * @param player フォームを表示する対象
      */
-    public static openManagerForm(player: Player) {
+    public static openManagerUI(player: Player) {
         FORM.main().open(player);
     }
 }

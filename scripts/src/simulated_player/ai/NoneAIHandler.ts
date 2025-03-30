@@ -11,7 +11,7 @@ export class NoneAIHandler extends SimulatedPlayerAIHandler {
         }
     }
 
-    public static getOrCreateHandler(manager: SimulatedPlayerManager): NoneAIHandler {
+    public static get(manager: SimulatedPlayerManager): NoneAIHandler {
         const constructor = (manager: SimulatedPlayerManager) => new NoneAIHandler(manager);
         return SimulatedPlayerAIHandler.__getOrCreateHandler__(manager, NoneAIHandler.ID, constructor);
     }
