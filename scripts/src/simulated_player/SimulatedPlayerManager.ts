@@ -1,6 +1,6 @@
-import { Block, EntityComponentTypes, EntityQueryOptions, EquipmentSlot, GameMode, ItemStack, Player, system, Vector3, world } from "@minecraft/server";
+import { Block, BlockVolume, EntityComponentTypes, EntityQueryOptions, EquipmentSlot, GameMode, ItemStack, Player, system, Vector3, world } from "@minecraft/server";
 import { register, SimulatedPlayer } from "@minecraft/server-gametest";
-import { MinecraftDimensionTypes, MinecraftEntityTypes } from "../lib/@minecraft/vanilla-data/lib/index";
+import { MinecraftBlockTypes, MinecraftDimensionTypes, MinecraftEntityTypes } from "../lib/@minecraft/vanilla-data/lib/index";
 import { TripleAxisRotationBuilder, Vector3Builder } from "../util/Vector";
 import { Material } from "../lib/Material";
 import { SimulatedPlayerEventHandlerRegistrar, SimulatedPlayerEventHandlerRegistry } from "./events";
@@ -47,7 +47,7 @@ const nextSpawnRequestQueue: SimulatedPlayerSpawnRequestInternalInfo[] = [];
 
 let ok: boolean = true;
 
-register("simulated_player", "spawn", test => {
+register("simulated_player", "", test => {
     if (nextSpawnRequestQueue.length === 0) {
         throw new Error();
     }
@@ -240,7 +240,7 @@ export class SimulatedPlayerManager {
     }
 
     /**
-     * Player#isValid() && SimulatedPlayer#isValid()を返す関数
+     * `Player#isValid && SimulatedPlayer#isValid`を返す関数
      */
     public isValid(): boolean {
         return this.player.isValid && this.getAsServerPlayer().isValid;
@@ -315,7 +315,7 @@ export class SimulatedPlayerManager {
 
         TemporaryBlockManager.tryPlace(block, config);
 
-        SimulatedPlayerEventHandlerRegistry.get("onPlaceBlock").call({
+        SimulatedPlayerEventHandlerRegistry.get("onPlaceBlock").fireEvent({
             "simulatedPlayerManager": this,
             "block": block
         });
@@ -375,7 +375,12 @@ export class SimulatedPlayerManager {
         if (ok) {
             nextSpawnRequestQueue.push(request);
             ok = false;
-            world.getDimension(MinecraftDimensionTypes.Overworld).runCommand("execute positioned 0.0 0.0 100000.0 run gametest run simulated_player:spawn");
+            const overworld = world.getDimension(MinecraftDimensionTypes.Overworld);
+            overworld.fillBlocks(
+                new BlockVolume({ x: -2, y: -60, z: 100000 }, { x: 3, y: 319, z: 100006 }),
+                MinecraftBlockTypes.Air
+            );
+            overworld.runCommand("execute positioned 0.0 0.0 100000.0 run gametest run \"simulated_player:\"");
         }
         else {
             system.run(() => {
@@ -461,7 +466,7 @@ world.afterEvents.entityHealthChanged.subscribe(event => {
 
     manager.getAsGameTestPlayer().nameTag = `${manager.getAsGameTestPlayer().name}\n§r§cHealth: §f${value}`;
 
-    SimulatedPlayerEventHandlerRegistry.get("onHealthChange").call({
+    SimulatedPlayerEventHandlerRegistry.get("onHealthChange").fireEvent({
         "currentValue": event.newValue,
         "previousValue": event.oldValue,
         "simulatedPlayerManager": manager
@@ -474,7 +479,7 @@ world.afterEvents.entityDie.subscribe(event => {
     if (manager === undefined) return;
     if (!manager.isValid()) return;
 
-    SimulatedPlayerEventHandlerRegistry.get("onDie").call({
+    SimulatedPlayerEventHandlerRegistry.get("onDie").fireEvent({
         "damageSource": event.damageSource,
         "simulatedPlayerManager": manager
     });
@@ -494,7 +499,7 @@ world.afterEvents.playerSpawn.subscribe(event => {
         manager.getAsGameTestPlayer().nameTag = `${manager.getAsGameTestPlayer().name}\n§r§cHealth: §f20`;
     });
 
-    SimulatedPlayerEventHandlerRegistry.get("onSpawn").call({
+    SimulatedPlayerEventHandlerRegistry.get("onSpawn").fireEvent({
         "simulatedPlayerManager": manager
     });
 });
@@ -519,7 +524,7 @@ world.afterEvents.entityHurt.subscribe(event => {
 
     if (manager === undefined) return;
 
-    SimulatedPlayerEventHandlerRegistry.get("onHurt").call({
+    SimulatedPlayerEventHandlerRegistry.get("onHurt").fireEvent({
         "simulatedPlayerManager": manager,
         "damageAmount": event.damage,
         "damageSource": event.damageSource
@@ -535,7 +540,7 @@ world.afterEvents.entityHurt.subscribe(event => {
 
     if (manager === undefined) return;
 
-    SimulatedPlayerEventHandlerRegistry.get("onAttack").call({
+    SimulatedPlayerEventHandlerRegistry.get("onAttack").fireEvent({
         "simulatedPlayerManager": manager,
         "target": event.hurtEntity,
         "damage": event.damage,
@@ -550,7 +555,7 @@ world.beforeEvents.playerInteractWithEntity.subscribe(async event => {
 
     await Promise.resolve();
 
-    SimulatedPlayerEventHandlerRegistry.get("onInteractedByPlayer").call({
+    SimulatedPlayerEventHandlerRegistry.get("onInteractedByPlayer").fireEvent({
         "simulatedPlayerManager": manager,
         "interacter": event.player
     });

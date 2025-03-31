@@ -12,6 +12,10 @@ SimulatedPlayerManager.events.on("onDie", async event => {
     event.simulatedPlayerManager.getAsGameTestPlayer().respawn();
 });
 
+SimulatedPlayerManager.events.on("onSpawn", event => {
+    event.simulatedPlayerManager.repairEquipment();
+});
+
 SimulatedPlayerManager.events.on("onInteractedByPlayer", event => {
     if (event.interacter.isSneaking) {
         event.simulatedPlayerManager.openConfigUI(event.interacter);
@@ -105,7 +109,7 @@ SimulatedPlayerAIHandlerRegistry.register(TestAIHandler);
 
 await system.waitTicks(1);
 
-console.log("'Early Execution' has been ended.");
+console.log("End of 'Early Execution'");
 
 // Steveを召喚
 system.sendScriptEvent("simulated_player:spawn", SIMULATED_PLAYER_DEFAULT_NAME);

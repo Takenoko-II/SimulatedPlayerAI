@@ -19,8 +19,6 @@ interface TemporaryBlock {
     sec: number;
 }
 
-console.log("TEMPORARY");
-
 system.runInterval(() => {
     TemporaryBlockManager.advanceClock(1);
 }, 20);

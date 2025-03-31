@@ -111,7 +111,7 @@ export const ENEMIES_FOR_SIMULATED_PLAYER: string[] = [
     "llama_spit",
     "eye_of_ender_signal",
     "wind_charge_projectile",
-    "player"
+    // "player"
     // "armor_stand"
 ];
 

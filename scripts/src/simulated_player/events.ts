@@ -96,7 +96,7 @@ export class SimulatedPlayerEventHandlerRegistry<T extends keyof SimulatedPlayer
         return id;
     }
 
-    public call(event: SimulatedPlayerEventTypes[T]): void {
+    public fireEvent(event: SimulatedPlayerEventTypes[T]): void {
         this.__handlers__.forEach(listener => {
             listener(event);
         });
