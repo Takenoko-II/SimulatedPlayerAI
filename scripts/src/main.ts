@@ -82,6 +82,10 @@ system.afterEvents.scriptEventReceive.subscribe(event => {
             console.log("blocks: " + JSON.stringify(TemporaryBlockManager.getAllBlocks(), undefined, 2));
             break;
         }
+        case "eval": {
+            eval(event.message);
+            break;
+        }
     }
 });
 

@@ -45,7 +45,7 @@ interface SimulatedPlayerSpawnRequestInternalInfo extends SimulatedPlayerSpawnRe
 
 const nextSpawnRequestQueue: SimulatedPlayerSpawnRequestInternalInfo[] = [];
 
-let ok: boolean = true;
+let canBeAddedToQueue: boolean = true;
 
 register("simulated_player", "", test => {
     if (nextSpawnRequestQueue.length === 0) {
@@ -68,8 +68,9 @@ register("simulated_player", "", test => {
 
     if (typeof request.onCreate === "function") {
         request.onCreate(manager, Date.now() - request.time);
-        ok = true;
     }
+
+    canBeAddedToQueue = true;
 })
 .structureName("simulated_player:")
 .maxTicks(2147483647);
@@ -372,13 +373,14 @@ export class SimulatedPlayerManager {
     }
 
     private static waitToBeAddedToQueue(request: SimulatedPlayerSpawnRequestInternalInfo) {
-        if (ok) {
+        if (canBeAddedToQueue) {
             nextSpawnRequestQueue.push(request);
-            ok = false;
+            canBeAddedToQueue = false;
             const overworld = world.getDimension(MinecraftDimensionTypes.Overworld);
             overworld.fillBlocks(
                 new BlockVolume({ x: -2, y: -60, z: 100000 }, { x: 3, y: 319, z: 100006 }),
-                MinecraftBlockTypes.Air
+                MinecraftBlockTypes.Air,
+                { ignoreChunkBoundErrors: true }
             );
             overworld.runCommand("execute positioned 0.0 0.0 100000.0 run gametest run \"simulated_player:\"");
         }
