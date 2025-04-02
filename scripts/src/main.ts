@@ -1,4 +1,4 @@
-import { Player, system, ItemStack } from "@minecraft/server";
+import { Player, system, ItemStack, GameMode, world } from "@minecraft/server";
 import { SimulatedPlayerManager } from "./simulated_player/SimulatedPlayerManager";
 import { Material } from "./lib/Material";
 import { SIMULATED_PLAYER_DEFAULT_NAME, SimulatedPlayerAIHandlerRegistry, SimulatedPlayerArmorMaterial, SimulatedPlayerAuxiliary, SimulatedPlayerWeaponMaterial } from "./simulated_player/enumerations";
@@ -6,14 +6,24 @@ import { CombatAIHandler} from "./simulated_player/ai/CombatAIHandler";
 import { SimulatedPlayerAIHandler } from "./simulated_player/AI";
 import { TemporaryBlockManager } from "./simulated_player/TemporaryBlock";
 
+SimulatedPlayerManager.events.on("onSpawn", event => {
+    event.simulatedPlayerManager.repairEquipment();
+});
+
+SimulatedPlayerManager.events.on("onBeforeLeave", event => {
+    world.sendMessage([
+        { text: "§e" },
+        {
+            translate: "multiplayer.player.left",
+            with: [event.simulatedPlayerManager.getAsServerPlayer().name]
+        }
+    ]);
+});
+
 SimulatedPlayerManager.events.on("onDie", async event => {
     await system.waitTicks(60);
     if (!event.simulatedPlayerManager.isValid()) return;
     event.simulatedPlayerManager.getAsGameTestPlayer().respawn();
-});
-
-SimulatedPlayerManager.events.on("onSpawn", event => {
-    event.simulatedPlayerManager.repairEquipment();
 });
 
 SimulatedPlayerManager.events.on("onInteractedByPlayer", event => {
@@ -37,13 +47,14 @@ system.afterEvents.scriptEventReceive.subscribe(event => {
         case "spawn": {
             SimulatedPlayerManager.requestSpawnPlayer({
                 name: event.message.length === 0 ? SIMULATED_PLAYER_DEFAULT_NAME : event.message,
-                onCreate(player) {
+                onCreate(player, timeTakenToSpawn) {
                     player.setAIHandler(CombatAIHandler.ID);
                     player.weapon = SimulatedPlayerWeaponMaterial.WOODEN;
                     player.armor = SimulatedPlayerArmorMaterial.LEATHER;
                     player.canUseEnderPearl = true;
                     player.auxiliary = SimulatedPlayerAuxiliary.TOTEM;
                     player.projectile = new ItemStack(Material.SNOWBALL.getAsItemType(), 16);
+                    console.log(timeTakenToSpawn);
                 }
             });
             break;

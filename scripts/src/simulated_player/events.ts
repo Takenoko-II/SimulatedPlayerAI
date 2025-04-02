@@ -58,6 +58,8 @@ interface SimulatedPlayerInteractedByPlayerEvent extends SimulatedPlayerEvent {
     readonly interacter: Player;
 }
 
+interface SimulatedPlayerBeforeLeaveEvent extends SimulatedPlayerEvent {}
+
 type SimulatedPlayerEventTypes = {
     readonly onHealthChange: SimulatedPlayerHealthChangeEvent;
 
@@ -72,6 +74,8 @@ type SimulatedPlayerEventTypes = {
     readonly onAttack: SimulatedPlayerAttackEntityEvent;
 
     readonly onInteractedByPlayer: SimulatedPlayerInteractedByPlayerEvent;
+
+    readonly onBeforeLeave: SimulatedPlayerBeforeLeaveEvent;
 }
 
 type RegistryUnion<T extends keyof SimulatedPlayerEventTypes = keyof SimulatedPlayerEventTypes> = T extends unknown ? SimulatedPlayerEventHandlerRegistry<T> : never;
@@ -138,4 +142,6 @@ export class SimulatedPlayerEventHandlerRegistry<T extends keyof SimulatedPlayer
     private static readonly onAttack = new this("onAttack");
 
     private static readonly onInteractedByPlayer = new this("onInteractedByPlayer");
+
+    private static readonly onBeforeLeave = new this("onBeforeLeave");
 }

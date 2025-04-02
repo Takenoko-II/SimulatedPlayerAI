@@ -131,7 +131,7 @@ export const FORM = {
             }
         })
         .onPush(button => button.tags.includes("player"), event => {
-            const manager = SimulatedPlayerManager.getById(event.button.tags[1]);
+            const manager = SimulatedPlayerManager.getByEntityId(event.button.tags[1]);
             if (manager === undefined) return;
             callback(manager);
         });

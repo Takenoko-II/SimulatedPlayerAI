@@ -2,7 +2,7 @@ import { Entity, GameMode, ItemStack, Player, system } from "@minecraft/server";
 import { SimulatedPlayerManager } from ".././SimulatedPlayerManager";
 import { Material } from "../../lib/Material";
 import { Vector3Builder } from "../../util/Vector";
-import { ENEMIES_FOR_SIMULATED_PLAYER, SIMULATED_PLAYER_BASE_SPEED, SimulatedPlayerAIHandlerRegistry, SimulatedPlayerArmorMaterial } from ".././enumerations";
+import { SIMULATED_PLAYER_ENEMIES, SIMULATED_PLAYER_BASE_SPEED, SimulatedPlayerAIHandlerRegistry, SimulatedPlayerArmorMaterial } from ".././enumerations";
 import { RandomHandler } from "../../util/Random";
 import { TemporaryBlockPlacementConfig } from ".././TemporaryBlock";
 import { sentry } from "../../lib/TypeSentry";
@@ -137,7 +137,7 @@ export class CombatAIHandler extends SimulatedPlayerAIHandler {
 
         const player = this.manager.getAsGameTestPlayer();
 
-        const entities = player.dimension.getEntities({ location: location, maxDistance: this.config.followRange, excludeTypes: ENEMIES_FOR_SIMULATED_PLAYER })
+        const entities = player.dimension.getEntities({ location: location, maxDistance: this.config.followRange, excludeTypes: SIMULATED_PLAYER_ENEMIES })
         .filter(entity => {
             if (entity.id === player.id) return false;
 
@@ -206,7 +206,7 @@ export class CombatAIHandler extends SimulatedPlayerAIHandler {
             .getLocalAxisProvider()
             .getX();
 
-            if (SimulatedPlayerManager.getById(target.id) === undefined && this.behaviorState.directionToMoveAround === "RIGHT") {
+            if (SimulatedPlayerManager.getByEntityId(target.id) === undefined && this.behaviorState.directionToMoveAround === "RIGHT") {
                 // targetがSimulatedPlayerでないときのみ
                 direction.invert();
             }

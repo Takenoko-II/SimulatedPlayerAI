@@ -1,7 +1,7 @@
-import { Block, BlockVolume, EntityComponentTypes, EntityQueryOptions, EquipmentSlot, GameMode, ItemStack, Player, system, Vector3, world } from "@minecraft/server";
+import { Block, BlockVolume, EntityComponentTypes, EntityQueryOptions, EquipmentSlot, GameMode, ItemStack, Player, system, UnloadedChunksError, Vector3, world } from "@minecraft/server";
 import { register, SimulatedPlayer } from "@minecraft/server-gametest";
 import { MinecraftBlockTypes, MinecraftDimensionTypes, MinecraftEntityTypes } from "../lib/@minecraft/vanilla-data/lib/index";
-import { TripleAxisRotationBuilder, Vector3Builder } from "../util/Vector";
+import { Vector3Builder } from "../util/Vector";
 import { Material } from "../lib/Material";
 import { SimulatedPlayerEventHandlerRegistrar, SimulatedPlayerEventHandlerRegistry } from "./events";
 import { SIMULATED_PLAYER_COMMAND_TAG, SimulatedPlayerAIHandlerRegistry, SimulatedPlayerArmorMaterial, SimulatedPlayerAuxiliary, SimulatedPlayerWeaponMaterial } from "./enumerations";
@@ -31,7 +31,7 @@ export interface SimulatedPlayerSpawnRequest {
 
     /**
      * プレイヤーが作成された瞬間実行される関数
-     * @param manager 作成されたプレイヤーを表現するSimulatedPlayerManagerクラスのインスタンス
+     * @param manager 作成されたプレイヤーを表現する`SimulatedPlayerManager`クラスのインスタンス
      * @param timeTakenToSpawn リクエスト送信から作成までにかかった時間
      */
     onCreate?(manager: SimulatedPlayerManager, timeTakenToSpawn: number): void;
@@ -372,28 +372,26 @@ export class SimulatedPlayerManager {
         });
     }
 
-    private static waitToBeAddedToQueue(request: SimulatedPlayerSpawnRequestInternalInfo) {
+    private static async waitToBeAddedToQueue(request: SimulatedPlayerSpawnRequestInternalInfo): Promise<void> {
         if (canBeAddedToQueue) {
             nextSpawnRequestQueue.push(request);
             canBeAddedToQueue = false;
-            const overworld = world.getDimension(MinecraftDimensionTypes.Overworld);
-            overworld.fillBlocks(
+            world.getDimension(MinecraftDimensionTypes.Overworld).fillBlocks(
                 new BlockVolume({ x: -2, y: -60, z: 100000 }, { x: 3, y: 319, z: 100006 }),
                 MinecraftBlockTypes.Air,
                 { ignoreChunkBoundErrors: true }
             );
-            overworld.runCommand("execute positioned 0.0 0.0 100000.0 run gametest run \"simulated_player:\"");
+            world.getDimension(MinecraftDimensionTypes.Overworld).runCommand("execute positioned 0.0 0.0 100000.0 run gametest run \"simulated_player:\"");
         }
         else {
-            system.run(() => {
-                this.waitToBeAddedToQueue(request);
-            });
+            await system.waitTicks(1);
+            return this.waitToBeAddedToQueue(request);
         }
     }
 
     /**
-     * 条件に一致するSimulatedPlayerManagerをすべて取得する
-     * @param options EntityQueryOptionsが使えるよ
+     * 条件に一致する`SimulatedPlayerManager`をすべて取得する
+     * @param options `EntityQueryOptions`が使えるよ
      */
     public static getManagers(options?: EntityQueryOptions): Set<SimulatedPlayerManager> {
         const set: Set<SimulatedPlayerManager> = new Set();
@@ -416,11 +414,11 @@ export class SimulatedPlayerManager {
     }
 
     /**
-     * Entity#idからこのクラスのインスタンスを取得する関数
-     * @param id Entity#idで取れる文字列
-     * @returns 見つからなければundefined
+     * `Entity#id`からこのクラスのインスタンスを取得する関数
+     * @param id `Entity#id`で取れる文字列
+     * @returns 見つからなければ`undefined`
      */
-    public static getById(id: string): SimulatedPlayerManager | undefined {
+    public static getByEntityId(id: string): SimulatedPlayerManager | undefined {
         for (const playerManager of this.__instanceSet__) {
             if (playerManager.player.id === id && playerManager.isValid()) {
                 return playerManager;
@@ -431,7 +429,7 @@ export class SimulatedPlayerManager {
     }
 
     /**
-     * SimulatedPlayerに関するイベントを登録したり登録解除できたりするやつ
+     * `SimulatedPlayer`に関するイベントを登録したり登録解除できたりするやつ
      */
     public static readonly events: SimulatedPlayerEventHandlerRegistrar = {
         on(event, listener) {
@@ -455,7 +453,7 @@ export class SimulatedPlayerManager {
 }
 
 world.afterEvents.entityHealthChanged.subscribe(event => {
-    const manager = SimulatedPlayerManager.getById(event.entity.id);
+    const manager = SimulatedPlayerManager.getByEntityId(event.entity.id);
 
     if (manager === undefined) return;
     if (!manager.isValid()) return;
@@ -476,7 +474,7 @@ world.afterEvents.entityHealthChanged.subscribe(event => {
 });
 
 world.afterEvents.entityDie.subscribe(event => {
-    const manager = SimulatedPlayerManager.getById(event.deadEntity.id);
+    const manager = SimulatedPlayerManager.getByEntityId(event.deadEntity.id);
 
     if (manager === undefined) return;
     if (!manager.isValid()) return;
@@ -488,7 +486,7 @@ world.afterEvents.entityDie.subscribe(event => {
 });
 
 world.afterEvents.playerSpawn.subscribe(event => {
-    const manager = SimulatedPlayerManager.getById(event.player.id);
+    const manager = SimulatedPlayerManager.getByEntityId(event.player.id);
 
     if (manager === undefined) return;
     if (!manager.isValid()) return;
@@ -508,21 +506,17 @@ world.afterEvents.playerSpawn.subscribe(event => {
 
 // afterだと既にgetById()で取得不可能になっているためbeforeで
 world.beforeEvents.playerLeave.subscribe(event => {
-    const manager = SimulatedPlayerManager.getById(event.player.id);
+    const manager = SimulatedPlayerManager.getByEntityId(event.player.id);
 
     if (manager === undefined) return;
 
-    world.sendMessage([
-        { text: "§e" },
-        {
-            translate: "multiplayer.player.left",
-            with: [event.player.name]
-        }
-    ]);
+    SimulatedPlayerEventHandlerRegistry.get("onBeforeLeave").fireEvent({
+        "simulatedPlayerManager": manager
+    });
 });
 
 world.afterEvents.entityHurt.subscribe(event => {
-    const manager = SimulatedPlayerManager.getById(event.hurtEntity.id);
+    const manager = SimulatedPlayerManager.getByEntityId(event.hurtEntity.id);
 
     if (manager === undefined) return;
 
@@ -538,7 +532,7 @@ world.afterEvents.entityHurt.subscribe(event => {
 
     if (damager === undefined) return;
 
-    const manager = SimulatedPlayerManager.getById(damager.id);
+    const manager = SimulatedPlayerManager.getByEntityId(damager.id);
 
     if (manager === undefined) return;
 
@@ -551,7 +545,7 @@ world.afterEvents.entityHurt.subscribe(event => {
 });
 
 world.beforeEvents.playerInteractWithEntity.subscribe(async event => {
-    const manager = SimulatedPlayerManager.getById(event.target.id);
+    const manager = SimulatedPlayerManager.getByEntityId(event.target.id);
 
     if (manager === undefined) return;
 
