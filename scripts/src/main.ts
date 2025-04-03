@@ -1,4 +1,4 @@
-import { Player, system, ItemStack, GameMode, world } from "@minecraft/server";
+import { Player, system, ItemStack, GameMode, world, SystemInfo, InputButton } from "@minecraft/server";
 import { SimulatedPlayerManager } from "./simulated_player/SimulatedPlayerManager";
 import { Material } from "./lib/Material";
 import { SIMULATED_PLAYER_COMMAND_TAG, SIMULATED_PLAYER_DEFAULT_NAME, SimulatedPlayerAIHandlerRegistry, SimulatedPlayerArmorMaterial, SimulatedPlayerAuxiliary, SimulatedPlayerWeaponMaterial } from "./simulated_player/enumerations";
@@ -100,16 +100,18 @@ system.afterEvents.scriptEventReceive.subscribe(event => {
             break;
         }
         case "info": {
-            const runtime = collectRuntimeStats();
-            const plugins = collectPluginStats().plugins;
-            const server = system.serverSystemInfo;
-            const clients = world.getPlayers({ excludeTags: [SIMULATED_PLAYER_COMMAND_TAG] }).map(player => ({ ...player.clientSystemInfo, name: player.name, id: player.id }));
             const serializer = new Serializer();
             serializer.hidePrototypeOf(Object);
             serializer.hidePrototypeOf(Array);
-            serializer.hidePrototypeOf(Function);
+            serializer.unhidePrototypeOf(Function);
+            serializer.hidePrototypeOf(SystemInfo);
+
             console.log("info: " + serializer.serialize({
-                runtime, plugins, server, clients
+                runtime: collectRuntimeStats(),
+                plugins: collectPluginStats().plugins,
+                server: system.serverSystemInfo,
+                clients: world.getPlayers({ excludeTags: [SIMULATED_PLAYER_COMMAND_TAG] }).map(player => ({ id: player.id, name: player.name, ...player.clientSystemInfo })),
+                simulations: [...SimulatedPlayerManager.getManagers()].map(player => ({ id: player.getAsServerPlayer().id, name: player.getAsServerPlayer().name, isValid: player.isValid() }))
             }));
             break;
         }

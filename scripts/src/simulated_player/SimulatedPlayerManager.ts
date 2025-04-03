@@ -1,4 +1,4 @@
-import { Block, BlockVolume, EntityComponentTypes, EntityQueryOptions, EquipmentSlot, GameMode, ItemStack, Player, system, UnloadedChunksError, Vector3, world } from "@minecraft/server";
+import { Block, BlockVolume, EntityComponentTypes, EntityQueryOptions, EquipmentSlot, GameMode, ItemStack, Player, system, Vector3, world } from "@minecraft/server";
 import { register, SimulatedPlayer } from "@minecraft/server-gametest";
 import { MinecraftBlockTypes, MinecraftDimensionTypes, MinecraftEntityTypes } from "../lib/@minecraft/vanilla-data/lib/index";
 import { Vector3Builder } from "../util/Vector";
@@ -95,7 +95,7 @@ export class SimulatedPlayerManager {
 
     private __ai__: SimulatedPlayerAIHandler = NoneAIHandler.get(this);
 
-    private __respawnPoint__: Vector3Builder = Vector3Builder.from(world.getDefaultSpawnLocation()).add({ x: 0.5, y: 0.5, z: 0.5 });
+    private __respawnPoint__: Vector3Builder = Vector3Builder.from(world.getDefaultSpawnLocation()).add({ x: 0.5, y: 0.0, z: 0.5 });
 
     private constructor(player: SimulatedPlayer) {
         this.player = player;
@@ -126,23 +126,30 @@ export class SimulatedPlayerManager {
     }
 
     /**
-     * このインスタンスが表現するプレイヤーをSimulatedPlayerとして取得する関数
+     * このインスタンスが表現するプレイヤーを`SimulatedPlayer`として取得する関数
      */
     public getAsGameTestPlayer(): SimulatedPlayer {
         return this.player;
     }
 
     /**
-     * このインスタンスが表現するプレイヤーをPlayerとして取得する関数
+     * このインスタンスが表現するプレイヤーを`Player`として取得する関数
      */
     public getAsServerPlayer(): Player {
         return world.getPlayers().filter(player => player.id === this.player.id)[0];
     }
 
+    /**
+     * このインスタンスのAIを操作するオブジェクトを返す関数
+     */
     public getAIHandler(): SimulatedPlayerAIHandler {
         return this.__ai__;
     }
 
+    /**
+     * このインスタンスのAIを操作するオブジェクトを文字列IDで指定して設定する関数
+     * @param id AIハンドラのID
+     */
     public setAIHandler(id: string): void {
         this.__ai__ = SimulatedPlayerAIHandlerRegistry.getHandlerById(id, this);
     }
@@ -232,10 +239,16 @@ export class SimulatedPlayerManager {
         this.__canUseEnderPearl__ = value;
     }
 
+    /**
+     * リスポーンポイントを取得する関数
+     */
     public getRespawnPoint(): Vector3Builder {
         return this.__respawnPoint__.clone();
     }
 
+    /**
+     * リスポーンポイントを設定する関数
+     */
     public setRespawnPoint(location: Vector3): void {
         this.__respawnPoint__ = Vector3Builder.from(location);
     }
@@ -247,6 +260,9 @@ export class SimulatedPlayerManager {
         return this.player.isValid && this.getAsServerPlayer().isValid;
     }
 
+    /**
+     * 死亡していれば`true`
+     */
     public isDead(): boolean {
         if (!this.isValid()) {
             throw new Error();
@@ -307,6 +323,11 @@ export class SimulatedPlayerManager {
         FORM.config(this).open(player);
     }
 
+    /**
+     * 任意の場所に任意のブロックを設置させる関数
+     * @param block 設置位置となるブロック
+     * @param config ブロックの設定
+     */
     public placeBlockAt(block: Block, config: TemporaryBlockPlacementConfig) {
         if (!this.isValid()) {
             throw new Error();
@@ -322,6 +343,10 @@ export class SimulatedPlayerManager {
         });
     }
 
+    /**
+     * その場で任意のブロックを積み上げさせる関数
+     * @param config ブロックの設定
+     */
     public pileUpBlock(config: TemporaryBlockPlacementConfig) {
         if (!this.isValid()) {
             throw new Error();
@@ -343,6 +368,10 @@ export class SimulatedPlayerManager {
         }, 6);
     }
 
+    /**
+     * 足元に足場として任意のブロックを設置させる関数
+     * @param config ブロックの設定
+     */
     public placePathBlock(config: TemporaryBlockPlacementConfig) {
         if (!this.isValid()) {
             throw new Error();
