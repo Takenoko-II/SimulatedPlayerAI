@@ -5,7 +5,7 @@
         "name": "SimulatedPlayerAI",
         "uuid": "a3804140-6d87-4efa-b0f8-5e8584755fb1",
         "version": [0, 0, 0],
-        "min_engine_version": [1, 21, 30]
+        "min_engine_version": [1, 21, 71]
     },
     "modules": [
         {
@@ -23,7 +23,9 @@
             "entry": "scripts/dest/main.js"
         }
     ],
-    "capabilities": ["script_eval"],
+    "capabilities": [
+        "script_eval"
+    ],
     "dependencies": [
         {
             "module_name": "@minecraft/server",
@@ -35,6 +37,10 @@
         },
         {
             "module_name": "@minecraft/server-gametest",
+            "version": "1.0.0-beta"
+        },
+        {
+            "module_name": "@minecraft/debug-utilities",
             "version": "1.0.0-beta"
         }
     ]

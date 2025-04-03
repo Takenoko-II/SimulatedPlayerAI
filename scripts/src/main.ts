@@ -1,10 +1,12 @@
 import { Player, system, ItemStack, GameMode, world } from "@minecraft/server";
 import { SimulatedPlayerManager } from "./simulated_player/SimulatedPlayerManager";
 import { Material } from "./lib/Material";
-import { SIMULATED_PLAYER_DEFAULT_NAME, SimulatedPlayerAIHandlerRegistry, SimulatedPlayerArmorMaterial, SimulatedPlayerAuxiliary, SimulatedPlayerWeaponMaterial } from "./simulated_player/enumerations";
+import { SIMULATED_PLAYER_COMMAND_TAG, SIMULATED_PLAYER_DEFAULT_NAME, SimulatedPlayerAIHandlerRegistry, SimulatedPlayerArmorMaterial, SimulatedPlayerAuxiliary, SimulatedPlayerWeaponMaterial } from "./simulated_player/enumerations";
 import { CombatAIHandler} from "./simulated_player/ai/CombatAIHandler";
 import { SimulatedPlayerAIHandler } from "./simulated_player/AI";
 import { TemporaryBlockManager } from "./simulated_player/TemporaryBlock";
+import { collectPluginStats, collectRuntimeStats } from "@minecraft/debug-utilities";
+import { Serializer } from "./util/Serializable";
 
 SimulatedPlayerManager.events.on("onSpawn", event => {
     event.simulatedPlayerManager.repairEquipment();
@@ -95,6 +97,20 @@ system.afterEvents.scriptEventReceive.subscribe(event => {
         }
         case "eval": {
             eval(event.message);
+            break;
+        }
+        case "info": {
+            const runtime = collectRuntimeStats();
+            const plugins = collectPluginStats().plugins;
+            const server = system.serverSystemInfo;
+            const clients = world.getPlayers({ excludeTags: [SIMULATED_PLAYER_COMMAND_TAG] }).map(player => ({ ...player.clientSystemInfo, name: player.name, id: player.id }));
+            const serializer = new Serializer();
+            serializer.hidePrototypeOf(Object);
+            serializer.hidePrototypeOf(Array);
+            serializer.hidePrototypeOf(Function);
+            console.log("info: " + serializer.serialize({
+                runtime, plugins, server, clients
+            }));
             break;
         }
     }
