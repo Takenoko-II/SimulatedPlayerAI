@@ -37,22 +37,23 @@ export interface SimulatedPlayerSpawnRequest {
     onCreate?(manager: SimulatedPlayerManager, timeTakenToSpawn: number): void;
 }
 
-interface SimulatedPlayerSpawnRequestInternalInfo extends SimulatedPlayerSpawnRequest {
+interface SimulatedPlayerSpawnInternalRequest extends SimulatedPlayerSpawnRequest {
     readonly time: number;
 
     newManager(player: SimulatedPlayer): SimulatedPlayerManager;
 }
 
-const nextSpawnRequestQueue: SimulatedPlayerSpawnRequestInternalInfo[] = [];
+let nextSpawnInternalRequest: SimulatedPlayerSpawnInternalRequest | undefined = undefined;
 
 let canBeAddedToQueue: boolean = true;
 
 register("simulated_player", "", test => {
-    if (nextSpawnRequestQueue.length === 0) {
-        throw new Error();
+    if (nextSpawnInternalRequest === undefined) {
+        throw new Error("リクエストが破棄されました");
     }
 
-    const request = nextSpawnRequestQueue.shift()!;
+    const request = nextSpawnInternalRequest;
+    nextSpawnInternalRequest = undefined;
 
     const player = test.spawnSimulatedPlayer(
         { x: 0, y: 0, z: 0 },
@@ -109,7 +110,7 @@ export class SimulatedPlayerManager {
                     return () => ({ dimension: that.getAsServerPlayer().dimension, ...that.getRespawnPoint() });
                 },
                 set(value) {
-                    throw new TypeError();
+                    throw new TypeError("'getSpawnPoint' は読み取り専用です");
                 }
             },
             setSpawnPoint: {
@@ -119,7 +120,7 @@ export class SimulatedPlayerManager {
                     }
                 },
                 set(value) {
-                    throw new TypeError();
+                    throw new TypeError("'setSpawnPoint' は読み取り専用です");
                 }
             }
         });
@@ -164,7 +165,7 @@ export class SimulatedPlayerManager {
     public set armor(value) {
         this.__armor__ = value;
         const equippable = this.getAsServerPlayer().getComponent(EntityComponentTypes.Equippable)!;
-        if (this.__armor__ === "none") {
+        if (this.__armor__ === SimulatedPlayerArmorMaterial.NONE) {
             equippable.setEquipment(EquipmentSlot.Head);
             equippable.setEquipment(EquipmentSlot.Chest);
             equippable.setEquipment(EquipmentSlot.Legs);
@@ -187,7 +188,7 @@ export class SimulatedPlayerManager {
 
     public set weapon(value) {
         this.__weapon__ = value;
-        if (this.__weapon__ === "none") {
+        if (this.__weapon__ === SimulatedPlayerWeaponMaterial.NONE) {
             this.getAsServerPlayer().getComponent(EntityComponentTypes.Inventory)!.container.setItem(0);
             this.getAsServerPlayer().selectedSlotIndex = 0;
         }
@@ -209,7 +210,7 @@ export class SimulatedPlayerManager {
 
         const offHandEquipment = this.getAsServerPlayer().getComponent(EntityComponentTypes.Equippable)!.getEquipmentSlot(EquipmentSlot.Offhand);
 
-        if (this.__auxiliary__ === "none") {
+        if (this.__auxiliary__ === SimulatedPlayerAuxiliary.NONE) {
             offHandEquipment.setItem();
         }
         else {
@@ -265,7 +266,7 @@ export class SimulatedPlayerManager {
      */
     public isDead(): boolean {
         if (!this.isValid()) {
-            throw new Error();
+            throw new Error("既にデスポーンしているためアクセスできません");
         }
 
         return this.getAsServerPlayer().dimension.getEntities({
@@ -280,7 +281,7 @@ export class SimulatedPlayerManager {
      */
     public repairEquipment(): void {
         if (!this.isValid()) {
-            throw new Error();
+            throw new Error("既にデスポーンしているためアクセスできません");
         }
 
         this.armor = this.armor;
@@ -292,10 +293,10 @@ export class SimulatedPlayerManager {
      * もやんがちゃんとしてくれればこんなのいらないのにね！！！！！！！！！！！！
      */
     public async reload(): Promise<void> {
-        if (this.__reloading__) throw new Error("still reloading");
+        if (this.__reloading__) throw new Error("まだリロード中です");
 
         if (!this.isValid()) {
-            throw new Error();
+            throw new Error("既にデスポーンしているためアクセスできません");
         }
 
         const location = this.getAsServerPlayer().location;
@@ -317,7 +318,7 @@ export class SimulatedPlayerManager {
      */
     public openConfigUI(player: Player) {
         if (!this.isValid()) {
-            throw new Error();
+            throw new Error("既にデスポーンしているためアクセスできません");
         }
 
         FORM.config(this).open(player);
@@ -330,7 +331,7 @@ export class SimulatedPlayerManager {
      */
     public placeBlockAt(block: Block, config: TemporaryBlockPlacementConfig) {
         if (!this.isValid()) {
-            throw new Error();
+            throw new Error("既にデスポーンしているためアクセスできません");
         }
 
         this.getAsGameTestPlayer().attack();
@@ -349,7 +350,7 @@ export class SimulatedPlayerManager {
      */
     public pileUpBlock(config: TemporaryBlockPlacementConfig) {
         if (!this.isValid()) {
-            throw new Error();
+            throw new Error("既にデスポーンしているためアクセスできません");
         }
 
         const player = this.getAsGameTestPlayer();
@@ -374,7 +375,7 @@ export class SimulatedPlayerManager {
      */
     public placePathBlock(config: TemporaryBlockPlacementConfig) {
         if (!this.isValid()) {
-            throw new Error();
+            throw new Error("既にデスポーンしているためアクセスできません");
         }
 
         const player = this.getAsGameTestPlayer();
@@ -391,19 +392,31 @@ export class SimulatedPlayerManager {
     /**
      * プレイヤーをワールドに召喚するよう要求する関数
      */
-    public static requestSpawnPlayer(request: SimulatedPlayerSpawnRequest): void {
+    public static async requestSpawnPlayer(request: SimulatedPlayerSpawnRequest): Promise<SimulatedPlayerManager> {
+        let manager: SimulatedPlayerManager;
+
         this.waitToBeAddedToQueue({
             time: Date.now(),
             newManager(player) {
-                return new SimulatedPlayerManager(player);
+                manager = new SimulatedPlayerManager(player);
+                return manager;
             },
             ...request
         });
+
+        return new Promise(resolve => {
+            const f = () => {
+                if (manager) resolve(manager);
+                else system.run(f);
+            }
+
+            system.run(f);
+        });
     }
 
-    private static async waitToBeAddedToQueue(request: SimulatedPlayerSpawnRequestInternalInfo): Promise<void> {
+    private static async waitToBeAddedToQueue(request: SimulatedPlayerSpawnInternalRequest): Promise<void> {
         if (canBeAddedToQueue) {
-            nextSpawnRequestQueue.push(request);
+            nextSpawnInternalRequest = request;
             canBeAddedToQueue = false;
             world.getDimension(MinecraftDimensionTypes.Overworld).fillBlocks(
                 new BlockVolume({ x: -2, y: -60, z: 100000 }, { x: 3, y: 319, z: 100006 }),
@@ -422,7 +435,7 @@ export class SimulatedPlayerManager {
      * 条件に一致する`SimulatedPlayerManager`をすべて取得する
      * @param options `EntityQueryOptions`が使えるよ
      */
-    public static getManagers(options?: EntityQueryOptions): Set<SimulatedPlayerManager> {
+    public static getManagers(options?: EntityQueryOptions): ReadonlySet<SimulatedPlayerManager> {
         const set: Set<SimulatedPlayerManager> = new Set();
 
         for (const playerManager of this.__instanceSet__) {

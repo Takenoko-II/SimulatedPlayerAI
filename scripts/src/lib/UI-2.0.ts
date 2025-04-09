@@ -417,6 +417,7 @@ export interface ModalFormSubmitEvent {
 
     /**
      * 入力された値を順にすべて返します。
+     * @deprecated 最新のプレビューではdividerやlabelに対応するundefinedが含まれるようになります。
      */
     getAllInputs(): (string | number | boolean | SelectedDropdownValue)[];
 }
@@ -581,7 +582,7 @@ export interface ModalFormTextField extends ModalFormElement {
 /**
  * ドロップダウンの選択肢
  */
-export interface DropdownOption {
+export interface DropdownOptionValue {
     readonly id: string;
 
     text: string | RawMessage;
@@ -593,7 +594,7 @@ export interface DropdownOption {
 export interface SelectedDropdownValue {
     readonly index: number;
 
-    readonly value: DropdownOption;
+    readonly value: DropdownOptionValue;
 }
 
 /**
@@ -603,7 +604,7 @@ export interface ModalFormDropdown extends ModalFormElement {
     /**
      * ドロップダウンのリスト
      */
-    readonly list: DropdownOption[];
+    readonly list: DropdownOptionValue[];
 
     /**
      * デフォルト値のインデックス
@@ -678,7 +679,7 @@ export interface ModalFormDropdownInput extends ModalFormElementInput {
     /**
      * ドロップダウンのリスト
      */
-    list: DropdownOption[];
+    list: DropdownOptionValue[];
 
     /**
      * デフォルト値のインデックス

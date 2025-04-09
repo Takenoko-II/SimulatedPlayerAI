@@ -79,8 +79,11 @@ export class TemporaryBlockManager {
     }
 
     public static tryPlace(block: Block, config: TemporaryBlockPlacementConfig) {
-        if (!block.isValid || !config.material.isBlock) {
-            throw new TypeError();
+        if (!block.isValid) {
+            throw new Error("読み込まれていないためブロックにアクセスできません");
+        }
+        else if (!config.material.isBlock) {
+            throw new TypeError("マテリアルがブロックではありません");
         }
 
         if (!block.isAir && !block.isLiquid) return;

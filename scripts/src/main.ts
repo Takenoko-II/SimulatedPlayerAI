@@ -1,4 +1,4 @@
-import { Player, system, ItemStack, GameMode, world, SystemInfo, InputButton } from "@minecraft/server";
+import { Player, system, ItemStack, GameMode, world, SystemInfo, InputButton, DimensionTypes } from "@minecraft/server";
 import { SimulatedPlayerManager } from "./simulated_player/SimulatedPlayerManager";
 import { Material } from "./lib/Material";
 import { SIMULATED_PLAYER_COMMAND_TAG, SIMULATED_PLAYER_DEFAULT_NAME, SimulatedPlayerAIHandlerRegistry, SimulatedPlayerArmorMaterial, SimulatedPlayerAuxiliary, SimulatedPlayerWeaponMaterial } from "./simulated_player/enumerations";
@@ -7,6 +7,7 @@ import { SimulatedPlayerAIHandler } from "./simulated_player/AI";
 import { TemporaryBlockManager } from "./simulated_player/TemporaryBlock";
 import { collectPluginStats, collectRuntimeStats } from "@minecraft/debug-utilities";
 import { Serializer } from "./util/Serializable";
+import { CalcExpEvaluator } from "./lib/CalcExpEvaluator";
 
 SimulatedPlayerManager.events.on("onSpawn", event => {
     event.simulatedPlayerManager.repairEquipment();
@@ -95,10 +96,6 @@ system.afterEvents.scriptEventReceive.subscribe(event => {
             console.log("blocks: " + JSON.stringify(TemporaryBlockManager.getAllBlocks(), undefined, 2));
             break;
         }
-        case "eval": {
-            eval(event.message);
-            break;
-        }
         case "info": {
             const serializer = new Serializer();
             serializer.hidePrototypeOf(Object);
@@ -145,4 +142,15 @@ await system.waitTicks(1);
 console.log("End of 'Early Execution'");
 
 // Steveを召喚
-system.sendScriptEvent("simulated_player:spawn", SIMULATED_PLAYER_DEFAULT_NAME);
+const manager = await SimulatedPlayerManager.requestSpawnPlayer({
+    name: "Steve",
+    onCreate(player, timeTakenToSpawn) {
+        player.setAIHandler(CombatAIHandler.ID);
+        player.weapon = SimulatedPlayerWeaponMaterial.IRON;
+        player.armor = SimulatedPlayerArmorMaterial.IRON;
+        player.canUseEnderPearl = true;
+        player.auxiliary = SimulatedPlayerAuxiliary.TOTEM;
+        player.projectile = new ItemStack(Material.SNOWBALL.getAsItemType(), 16);
+        console.log(timeTakenToSpawn);
+    }
+});

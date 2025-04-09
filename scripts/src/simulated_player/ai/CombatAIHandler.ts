@@ -70,7 +70,7 @@ export class CombatAIHandler extends SimulatedPlayerAIHandler {
                         that.__config__.block.lifespanSeconds = value;
                     }
                     else {
-                        throw new TypeError();
+                        throw new TypeError("'lifespanSeconds' はNaN値を受け付けません");
                     }
                 }
             },
@@ -79,7 +79,7 @@ export class CombatAIHandler extends SimulatedPlayerAIHandler {
                     return that.__config__.block.material;
                 },
                 set(value: Material) {
-                    if (!value.isBlock) throw new TypeError();
+                    if (!value.isBlock) throw new TypeError("'material' はブロックのものである必要があります");
                     that.__config__.block.material = value;
                 }
             }
@@ -94,7 +94,7 @@ export class CombatAIHandler extends SimulatedPlayerAIHandler {
                     that.__config__.followRange = value;
                 }
                 else {
-                    throw new TypeError();
+                    throw new TypeError("'followRange' はNaN値を受け付けません");
                 }
             }
         });
